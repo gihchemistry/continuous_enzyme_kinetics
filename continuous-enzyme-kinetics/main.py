@@ -454,12 +454,12 @@ def file_callback(attr, old, new):
         [desc],
         [main_row]
     ], sizing_mode=sizing_mode)
-        curdoc().clear()
+    curdoc().clear()
     curdoc().add_root(l)
     curdoc().title = "Kinetics"
 
     update()
-    
+
 # read data file
 data_file = join(dirname(__file__), 'test.csv')
 df = pd.read_csv(data_file)
