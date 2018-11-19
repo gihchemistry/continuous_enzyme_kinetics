@@ -433,6 +433,33 @@ def file_callback(attr, old, new):
                 title='X-Axis Range', width=700)
     range_slider.on_change('value', selection_change)
 
+    # update plots based on ticker selections
+    fit_choice.on_change('active', selection_change)
+    x_sample_choice.on_change('value', update_tickers)
+    subtract_sample_choice.on_change('value', update_tickers)
+    sample_select.on_change('value', update_tickers)
+    model_select.on_change('value', update_tickers)
+    transform.on_change('value', update_tickers)
+    offset_time.on_change('value', update_tickers)
+
+    # document formatting
+    desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1000)
+    header_row = row(fit_choice, upload_button)
+    widgets = widgetbox(model_select, sample_select, x_sample_choice,
+                        subtract_sample_choice, transform, offset_time)
+    table = widgetbox(data_table)
+    main_row = row(column(header_row, row(widgets, column(row(raw, model), range_slider, resi))), column(download_button, copy_button, table))
+    sizing_mode = 'scale_width'
+    l = layout([
+        [desc],
+        [main_row]
+    ], sizing_mode=sizing_mode)
+        curdoc().clear()
+    curdoc().add_root(l)
+    curdoc().title = "Kinetics"
+
+    update()
+    
 # read data file
 data_file = join(dirname(__file__), 'test.csv')
 df = pd.read_csv(data_file)
