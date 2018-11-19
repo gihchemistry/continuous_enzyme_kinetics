@@ -282,6 +282,7 @@ def selection_change(attrname, old, new):
     source_data_table.data = slope_data[['x', 'y']].to_dict('list')
     source_model.data = slope_data[['x', 'y']].to_dict('list')
     source_model_line.data = slope_data_fit[['xfit', 'yfit']].to_dict('list')
+    update()
 
 def file_callback(attr, old, new):
     global fit_choice
