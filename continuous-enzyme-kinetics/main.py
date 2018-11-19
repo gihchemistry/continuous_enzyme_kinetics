@@ -20,7 +20,7 @@ from scipy.interpolate import UnivariateSpline
 from bokeh.io import curdoc
 from bokeh.layouts import row, column, widgetbox, layout
 from bokeh.models import ColumnDataSource, CustomJS, HoverTool, Div, BasicTickFormatter
-from bokeh.models.widgets import DataTable, Select, TableColumn, Button, TextInput, RadioButtonGroup
+from bokeh.models.widgets import DataTable, Select, TableColumn, Button, TextInput, RadioButtonGroup, RangeSlider
 from bokeh.plotting import figure
 
 from io import StringIO
@@ -188,6 +188,13 @@ def refit_slopes(slope_data):
 def update_tickers(attrname, old, new):
     update()
 
+def update_range_slider(attrname, old, new):
+    range_slider.start=df[x_sample_choice.value].values[0]
+    range_slider.end
+    range_slider.value=(df[x_sample_choice.value].values[0], df[x_sample_guess].values[-1])
+    range_slider.step=step=df[x_sample_choice.value].values[1]-df[x_sample_guess].values[0]
+    update()
+
 def update():
     # update raw plot
     x = x_sample_choice.value
@@ -236,13 +243,16 @@ def update():
 
 def selection_change(attrname, old, new):
     fit_choice_dict[sample_select.value] = fit_choice.active
+
     # select range of current raw plot data
     x = x_sample_choice.value
     y = sample_select.value
     data = get_data(x, y)
+
     #data = data.sort_values('x')
-    selected = source_raw.selected.indices
-    print(selected)
+    selected_start = min(range(len(list(data['x'].values))), key=lambda i: abs(list(data['x'].values)[i]-range_slider.value[0]))
+    selected_end = min(range(len(list(data['x'].values))), key=lambda i: abs(list(data['x'].values)[i]-range_slider.value[1]))
+    selected = list(range(selected_start, selected_end))
     if len(selected) > 0:
         # subset data according to selected range
         tmp_data = data.iloc[selected, :].reset_index(drop=True)
@@ -392,7 +402,7 @@ def file_callback(attr, old, new):
     source_resi = ColumnDataSource(data=dict(xr=[], yr=[]))
     global resi
     resi = figure(title="Progress Curve Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
-             plot_width=700, plot_height=150, tools='wheel_zoom,pan,reset')
+             plot_width=700, plot_height=150, tools='wheel_zoom,reset')
     resi.yaxis.formatter = BasicTickFormatter(precision=1)
     resi.circle('xr', 'yr', size=5, source=source_resi, color='grey', alpha=0.6)
 
@@ -400,7 +410,7 @@ def file_callback(attr, old, new):
     source_raw = ColumnDataSource(data=dict(x=[], y=[]))
     global source_raw_line
     source_raw_line = ColumnDataSource(data=dict(xfit=[], yfit=[]))
-    tools_raw = 'xbox_select,wheel_zoom,pan,reset,save'
+    tools_raw = 'wheel_zoom,pan,reset,save'
     global raw
     raw = figure(title="Progress Curve Fit", x_axis_label="Time", y_axis_label="Signal",
                  plot_width=350, plot_height=250, tools=tools_raw)
@@ -416,39 +426,11 @@ def file_callback(attr, old, new):
     model.line('xfit', 'yfit', source=source_model_line, line_width=3, color='black', alpha=0.4)
 
     # update plots according to raw data selection
-    source_raw.on_change('selected', selection_change)
-    source_raw_line.on_change('selected', selection_change)
-    source_model.on_change('selected', selection_change)
-    source_model_line.on_change('selected', selection_change)
-    source_data_table.on_change('selected', selection_change)
-
-    # update plots based on ticker selections
-    fit_choice.on_change('active', selection_change)
-    x_sample_choice.on_change('value', update_tickers)
-    subtract_sample_choice.on_change('value', update_tickers)
-    sample_select.on_change('value', update_tickers)
-    model_select.on_change('value', update_tickers)
-    transform.on_change('value', update_tickers)
-    offset_time.on_change('value', update_tickers)
-
-    # document formatting
-    desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1000)
-    header_row = row(fit_choice, upload_button)
-    widgets = widgetbox(model_select, sample_select, x_sample_choice,
-                        subtract_sample_choice, transform, offset_time)
-    table = widgetbox(data_table)
-
-    main_row = row(column(header_row, row(widgets, column(row(raw, model), resi))), column(download_button, copy_button, table))
-    sizing_mode = 'scale_width'
-    l = layout([
-        [desc],
-        [main_row]
-    ], sizing_mode=sizing_mode)
-    curdoc().clear()
-    curdoc().add_root(l)
-    curdoc().title = "Kinetics"
-
-    update()
+    range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
+                value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
+                step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
+                title='X-Axis Range', width=700)
+    range_slider.on_change('value', selection_change)
 
 # read data file
 data_file = join(dirname(__file__), 'test.csv')
@@ -534,12 +516,12 @@ source_resi = ColumnDataSource(data=dict(xr=[], yr=[]))
 
 source_raw_line = ColumnDataSource(data=dict(xfit=[], yfit=[]))
 
-tools_raw = 'xbox_select,wheel_zoom,pan,reset,save'
+tools_raw = 'wheel_zoom,pan,reset,save'
 
 raw = figure(title="Progress Curve Fit", x_axis_label="Time", y_axis_label="Signal",
              plot_width=350, plot_height=250, tools=tools_raw)
 resi = figure(title="Progress Curve Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
-             plot_width=700, plot_height=150, tools='wheel_zoom,pan,reset')
+             plot_width=700, plot_height=150, tools='wheel_zoom,reset')
 resi.yaxis.formatter = BasicTickFormatter(precision=1)
 
 raw.circle('x', 'y', size=2, source=source_raw, color='gray',
@@ -557,19 +539,16 @@ model.circle('x', 'y', size=8, source=source_model, color='grey', alpha=0.6)
 model.line('xfit', 'yfit', source=source_model_line, line_width=3, color='black', alpha=0.4)
 
 # update plots according to raw data selection
-source_raw.on_change('selected', selection_change)
+range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
+                value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
+                step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
+                title='X-Axis Range', width=700)
 
-source_raw_line.on_change('selected', selection_change)
-
-source_model.on_change('selected', selection_change)
-
-source_model_line.on_change('selected', selection_change)
-
-source_data_table.on_change('selected', selection_change)
+range_slider.on_change('value', selection_change)
 
 # update plots based on ticker selections
 fit_choice.on_change('active', selection_change)
-x_sample_choice.on_change('value', update_tickers)
+x_sample_choice.on_change('value', update_range_slider)
 subtract_sample_choice.on_change('value', update_tickers)
 sample_select.on_change('value', update_tickers)
 model_select.on_change('value', update_tickers)
@@ -583,7 +562,7 @@ widgets = widgetbox(model_select, sample_select, x_sample_choice,
                     subtract_sample_choice, transform, offset_time)
 table = widgetbox(data_table)
 
-main_row = row(column(header_row, row(widgets, column(row(raw, model), resi))), column(download_button, copy_button, table))
+main_row = row(column(header_row, row(widgets, column(row(raw, model), range_slider, resi))), column(download_button, copy_button, table))
 sizing_mode = 'scale_width'
 l = layout([
     [desc],
