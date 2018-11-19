@@ -426,6 +426,7 @@ def file_callback(attr, old, new):
     model.line('xfit', 'yfit', source=source_model_line, line_width=3, color='black', alpha=0.4)
 
     # update plots according to raw data selection
+    global range_slider
     range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
                 value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
                 step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
