@@ -1,0 +1,20 @@
+[[source]]
+
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+
+
+[packages]
+
+django = "*"
+gunicorn = "*"
+django-heroku = "*"
+bokeh = "*"
+pandas = "*"
+xlrd = "*"
+scipy = "*"
+numpy = "*"
+
+[requires]
+
+python_version = "3.6"
