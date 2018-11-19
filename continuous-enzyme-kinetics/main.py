@@ -5,7 +5,7 @@ Created on Sat Jun 16 17:12:32 2018
 @author: molp
 """
 
-from functools import lru_cache
+#from functools import lru_cache
 
 from os import listdir
 from os.path import dirname, join
@@ -242,6 +242,7 @@ def selection_change(attrname, old, new):
     data = get_data(x, y)
     #data = data.sort_values('x')
     selected = source_raw.selected.indices
+    print(selected)
     if len(selected) > 0:
         # subset data according to selected range
         tmp_data = data.iloc[selected, :].reset_index(drop=True)
