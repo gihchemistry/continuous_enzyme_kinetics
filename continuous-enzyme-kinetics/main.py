@@ -260,10 +260,10 @@ def selection_change(attrname, old, new):
     new_fit = new_fit.sort_values('xfit')
     source_raw_line.data = new_fit[['xfit', 'yfit']].to_dict('list')
 
-    #xr = np.array(new_fit[['xfit']].values.T[0])
-    #yr = np.array(residuals)
-    #resi_df = pd.DataFrame(data={'xr' : xr, 'yr' : yr})
-    #source_resi.data = resi_df[['xr', 'yr']].to_dict('list')
+    xr = np.array(new_fit[['xfit']].values.T[0])
+    yr = np.array(residuals)
+    resi_df = pd.DataFrame(data={'xr' : xr, 'yr' : yr})
+    source_resi.data = resi_df[['xr', 'yr']].to_dict('list')
 
     # re-fit model based on selection
     exp_database[y] = tmp_data
