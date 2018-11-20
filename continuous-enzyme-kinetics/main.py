@@ -466,7 +466,7 @@ def file_callback(attrname, old, new):
     end_time.on_change('value', update_time)
 
     # document formatting
-    desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1000)
+    desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1200)
     widgets = widgetbox(model_select, sample_select, x_sample_choice,
                         subtract_sample_choice, transform, offset_time)
     table = widgetbox(data_table)
@@ -615,7 +615,7 @@ start_time.on_change('value', update_time)
 end_time.on_change('value', update_time)
 
 # document formatting
-desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1000)
+desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1200)
 widgets = widgetbox(model_select, sample_select, x_sample_choice,
                     subtract_sample_choice, transform, offset_time)
 table = widgetbox(data_table)
