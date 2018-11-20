@@ -190,10 +190,21 @@ def update_tickers(attrname, old, new):
 
 def update_range_slider(attrname, old, new):
     range_slider.start=df[x_sample_choice.value].values[0]
-    range_slider.end
+    range_slider.end=df[x_sample_choice.value].values[-1]
     range_slider.value=(df[x_sample_choice.value].values[0], df[x_sample_guess].values[-1])
     range_slider.step=step=df[x_sample_choice.value].values[1]-df[x_sample_guess].values[0]
     update()
+
+def update_time(attrname, old, new):
+    if range_slider.value[0] != float(start_time.value) or range_slider.value[1] != float(end_time.value):
+        x = x_sample_choice.value
+        y = sample_select.value
+        data = get_data(x, y)
+
+        #data = data.sort_values('x')
+        selected_start = min(enumerate(list(data['x'].values)), key=lambda x: abs(x[1]-float(start_time.value)))[1]
+        selected_end = min(enumerate(list(data['x'].values)), key=lambda x: abs(x[1]-float(end_time.value)))[1]
+        range_slider.value=(selected_start, selected_end)
 
 def update():
     # update raw plot
@@ -201,6 +212,12 @@ def update():
     y = sample_select.value
     data = get_data(x, y)
     data = data.sort_values('x')
+
+    selected_start = list(data['x'].values)[0]
+    selected_end = list(data['x'].values)[-1]
+    range_slider.value=(selected_start, selected_end)
+    start_time.value=str(list(data['x'].values)[0])
+    end_time.value=str(list(data['x'].values)[-1])
 
     source_raw.data = data[['x', 'y']].to_dict('list')
     if fit_choice_dict[sample_select.value] == 0:
@@ -252,6 +269,8 @@ def selection_change(attrname, old, new):
     #data = data.sort_values('x')
     selected_start = min(range(len(list(data['x'].values))), key=lambda i: abs(list(data['x'].values)[i]-range_slider.value[0]))
     selected_end = min(range(len(list(data['x'].values))), key=lambda i: abs(list(data['x'].values)[i]-range_slider.value[1]))
+    start_time.value=str(range_slider.value[0])
+    end_time.value=str(range_slider.value[1])
     selected = list(range(selected_start, selected_end))
     if len(selected) > 0:
         # subset data according to selected range
@@ -294,9 +313,9 @@ def selection_change(attrname, old, new):
     source_model.data = slope_data[['x', 'y']].to_dict('list')
     source_model_line.data = slope_data_fit[['xfit', 'yfit']].to_dict('list')
 
-def file_callback(attr, old, new):
+def file_callback(attrname, old, new):
     global fit_choice
-    fit_choice = RadioButtonGroup(labels=["Automated Linear", "Linear", "Logarithmic"], active=0, width=375)
+    fit_choice = RadioButtonGroup(labels=["Maximize Slope Magnitude", "Linear", "Logarithmic"], active=0, width=375)
     global fit_choice_dict
     fit_choice_dict = {}
     global file_source
@@ -322,7 +341,7 @@ def file_callback(attr, old, new):
         exp_database[sample] = df[[list(df)[0], sample]]
         fit_choice_dict[sample] = 0
     global model_select
-    model_select = Select(title='Choose Model', value='Michaelis-Menten', options=['Michaelis-Menten', 'EC50/IC50'])
+    model_select = Select(title='Choose Model', value='Michaelis-Menten', options=['Michaelis-Menten', 'EC50/IC50'], width=350)
     global source_model
     source_model = ColumnDataSource(data=dict(x=[], y=[]))
     global source_model_line
@@ -336,8 +355,8 @@ def file_callback(attr, old, new):
 
     global model
     model = figure(title="Model Fit", x_axis_label="Concentration", y_axis_label="Rate",
-                   plot_width=350, plot_height=250, tools=tools_model)
-    model.yaxis.formatter = BasicTickFormatter(precision=1)
+                   plot_width=350, plot_height=300, tools=tools_model)
+    model.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
 
     global slope_data, slope_data_fit
     slope_data, slope_data_fit = fit_slopes(exp_database)
@@ -361,19 +380,19 @@ def file_callback(attr, old, new):
     file_source = ColumnDataSource({'file_contents':[], 'file_name':[]})
     file_source.on_change('data', file_callback)
     global upload_button
-    upload_button = Button(label="Upload Local File", button_type="success", width=550)
+    upload_button = Button(label="Upload Local File", button_type="success", width=350)
     upload_button.callback = CustomJS(args=dict(file_source=file_source),
                                code=open(join(dirname(__file__), "upload.js")).read())
     global x_sample_choice
-    x_sample_choice = Select(title='X Axis Column', value=x_sample_guess, options=string_names+[' '])
+    x_sample_choice = Select(title='X Axis Column', value=x_sample_guess, options=string_names+[' '], width=350)
     global subtract_sample_choice
-    subtract_sample_choice = Select(title='Select Blank Sample for Subtraction', value=blank_sample_guess, options=string_names+[' '])
+    subtract_sample_choice = Select(title='Select Blank Sample for Subtraction', value=blank_sample_guess, options=string_names+[' '], width=350)
     global sample_select
-    sample_select = Select(title='Y Axis Sample', value=string_names[1], options=string_names+[' '])
+    sample_select = Select(title='Y Axis Sample', value=string_names[1], options=string_names+[' '], width=350)
     global transform
-    transform = TextInput(value=" ", title="Enter Transform Equation")
+    transform = TextInput(value=" ", title="Enter Transform Equation", width=350)
     global offset_time
-    offset_time = TextInput(value=" ", title="Enter Time Between Mixing and First Read")
+    offset_time = TextInput(value=" ", title="Enter Time Between Mixing and First Read", width=350)
 
     global source_data_table
     source_data_table = ColumnDataSource(slope_data)
@@ -402,8 +421,8 @@ def file_callback(attr, old, new):
     source_resi = ColumnDataSource(data=dict(xr=[], yr=[]))
     global resi
     resi = figure(title="Progress Curve Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
-             plot_width=700, plot_height=150, tools='wheel_zoom,reset')
-    resi.yaxis.formatter = BasicTickFormatter(precision=1)
+             plot_width=700, plot_height=200, tools='wheel_zoom,pan,reset')
+    resi.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
     resi.circle('xr', 'yr', size=5, source=source_resi, color='grey', alpha=0.6)
 
     global source_raw
@@ -413,7 +432,7 @@ def file_callback(attr, old, new):
     tools_raw = 'wheel_zoom,pan,reset,save'
     global raw
     raw = figure(title="Progress Curve Fit", x_axis_label="Time", y_axis_label="Signal",
-                 plot_width=350, plot_height=250, tools=tools_raw)
+                 plot_width=350, plot_height=300, tools=tools_raw)
 
     raw.circle('x', 'y', size=2, source=source_raw, color='gray',
                 selection_color="black", alpha=0.6, nonselection_alpha=0.2, selection_alpha=0.6)
@@ -430,8 +449,10 @@ def file_callback(attr, old, new):
     range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
                 value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
                 step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
-                title='X-Axis Range', width=700)
+                title='X-Axis Range', width=650)
     range_slider.on_change('value', selection_change)
+    start_time = TextInput(value=str(df[x_sample_guess].values[0]), title="Start Time")
+    end_time = TextInput(value=str(df[x_sample_guess].values[-1]), title='End Time')
 
     # update plots based on ticker selections
     fit_choice.on_change('active', selection_change)
@@ -441,14 +462,19 @@ def file_callback(attr, old, new):
     model_select.on_change('value', update_tickers)
     transform.on_change('value', update_tickers)
     offset_time.on_change('value', update_tickers)
+    start_time.on_change('value', update_time)
+    end_time.on_change('value', update_time)
 
     # document formatting
     desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1000)
-    header_row = row(fit_choice, upload_button)
     widgets = widgetbox(model_select, sample_select, x_sample_choice,
                         subtract_sample_choice, transform, offset_time)
     table = widgetbox(data_table)
-    main_row = row(column(header_row, row(widgets, column(row(raw, model), range_slider, resi))), column(download_button, copy_button, table))
+
+    main_row = row(column(upload_button, fit_choice, widgets),
+                    column(row(raw, model), resi, range_slider, row(start_time, end_time)),
+                    column(download_button, copy_button, table))
+
     sizing_mode = 'scale_width'
     l = layout([
         [desc],
@@ -471,7 +497,7 @@ for sample in list(df)[1:]:
     exp_database[sample] = df[[list(df)[0], sample]]
     fit_choice_dict[sample] = 0
 
-model_select = Select(title='Choose Model', value='Michaelis-Menten', options=['Michaelis-Menten', 'EC50/IC50'])
+model_select = Select(title='Choose Model', value='Michaelis-Menten', options=['Michaelis-Menten', 'EC50/IC50'], width=350)
 
 source_model = ColumnDataSource(data=dict(x=[], y=[]))
 
@@ -484,8 +510,8 @@ hover = HoverTool(tooltips=[
 ])
 
 model = figure(title="Spline Model Fit", x_axis_label="Concentration", y_axis_label="Rate",
-               plot_width=350, plot_height=250, tools=tools_model)
-model.yaxis.formatter = BasicTickFormatter(precision=1)
+               plot_width=350, plot_height=300, tools=tools_model)
+model.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
 
 slope_data, slope_data_fit = fit_slopes(exp_database)
 
@@ -508,15 +534,15 @@ for s in list(df):
 
 file_source = ColumnDataSource({'file_contents':[], 'file_name':[]})
 file_source.on_change('data', file_callback)
-upload_button = Button(label="Upload Local File", button_type="success", width=550)
+upload_button = Button(label="Upload Local File", button_type="success", width=350)
 upload_button.callback = CustomJS(args=dict(file_source=file_source),
                            code=open(join(dirname(__file__), "upload.js")).read())
 
-x_sample_choice = Select(title='X Axis Column', value=x_sample_guess, options=string_names+[' '])
-subtract_sample_choice = Select(title='Select Blank Sample for Subtraction', value=blank_sample_guess, options=string_names+[' '])
-sample_select = Select(title='Y Axis Sample', value=string_names[1], options=string_names+[' '])
-transform = TextInput(value=" ", title="Enter Transform Equation")
-offset_time = TextInput(value=" ", title="Enter Time Between Mixing and First Read")
+x_sample_choice = Select(title='X Axis Column', value=x_sample_guess, options=string_names+[' '], width=350)
+subtract_sample_choice = Select(title='Select Blank Sample for Subtraction', value=blank_sample_guess, options=string_names+[' '], width=350)
+sample_select = Select(title='Y Axis Sample', value=string_names[1], options=string_names+[' '], width=350)
+transform = TextInput(value=" ", title="Enter Transform Equation", width=350)
+offset_time = TextInput(value=" ", title="Enter Time Between Mixing and First Read", width=350)
 
 source_data_table = ColumnDataSource(slope_data)
 columns = [
@@ -547,10 +573,10 @@ source_raw_line = ColumnDataSource(data=dict(xfit=[], yfit=[]))
 tools_raw = 'wheel_zoom,pan,reset,save'
 
 raw = figure(title="Progress Curve Fit", x_axis_label="Time", y_axis_label="Signal",
-             plot_width=350, plot_height=250, tools=tools_raw)
+             plot_width=350, plot_height=300, tools=tools_raw)
 resi = figure(title="Progress Curve Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
-             plot_width=700, plot_height=150, tools='wheel_zoom,reset')
-resi.yaxis.formatter = BasicTickFormatter(precision=1)
+             plot_width=700, plot_height=200, tools='wheel_zoom,pan,reset')
+resi.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
 
 raw.circle('x', 'y', size=2, source=source_raw, color='gray',
             selection_color="black", alpha=0.6, nonselection_alpha=0.2, selection_alpha=0.6)
@@ -570,9 +596,12 @@ model.line('xfit', 'yfit', source=source_model_line, line_width=3, color='black'
 range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
                 value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
                 step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
-                title='X-Axis Range', width=700)
+                title='X-Axis Range', width=650)
 
 range_slider.on_change('value', selection_change)
+
+start_time = TextInput(value=str(df[x_sample_guess].values[0]), title="Start Time")
+end_time = TextInput(value=str(df[x_sample_guess].values[-1]), title='End Time')
 
 # update plots based on ticker selections
 fit_choice.on_change('active', selection_change)
@@ -582,15 +611,19 @@ sample_select.on_change('value', update_tickers)
 model_select.on_change('value', update_tickers)
 transform.on_change('value', update_tickers)
 offset_time.on_change('value', update_tickers)
+start_time.on_change('value', update_time)
+end_time.on_change('value', update_time)
 
 # document formatting
 desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1000)
-header_row = row(fit_choice, upload_button)
 widgets = widgetbox(model_select, sample_select, x_sample_choice,
                     subtract_sample_choice, transform, offset_time)
 table = widgetbox(data_table)
 
-main_row = row(column(header_row, row(widgets, column(row(raw, model), range_slider, resi))), column(download_button, copy_button, table))
+main_row = row(column(upload_button, fit_choice, widgets),
+                column(row(raw, model), resi, range_slider, row(start_time, end_time)),
+                column(download_button, copy_button, table))
+
 sizing_mode = 'scale_width'
 l = layout([
     [desc],
