@@ -447,10 +447,12 @@ def file_callback(attrname, old, new):
     # update plots according to raw data selection
     global range_slider
     range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
-                value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
-                step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
-                title='X-Axis Range', width=650)
+                    value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
+                    step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
+                    title='X-Axis Range', width=650)
     range_slider.on_change('value', selection_change)
+    global start_time
+    global end_time
     start_time = TextInput(value=str(df[x_sample_guess].values[0]), title="Start Time")
     end_time = TextInput(value=str(df[x_sample_guess].values[-1]), title='End Time')
 
