@@ -92,6 +92,9 @@ def fit_raw(x, y):
     derivative = np.abs(np.diff(yfit)/np.diff(x))
     threshold = 0.7*(np.max(derivative)-np.min(derivative))+np.min(derivative)
     ix_arr = np.where(derivative > threshold)[0]
+    while len(ix_arr) < 4:
+        threshold = threshold*.9
+        ix_arr = np.where(derivative > threshold)[0]
     ix_arr = list(np.sort(np.array(ix_arr)))
     xvalues, yvalues = x[ix_arr], y[ix_arr]
     tmp_df = pd.DataFrame(data={'x' : xvalues, 'y' : yvalues})
@@ -144,9 +147,10 @@ def fit_slopes(database):
                 slope, linear_fit, residuals = fit_linear(xtmp, ytmp)
             y.append(np.abs(slope))
             x.append(float(re.findall(r"[-+]?\d*\.\d+|\d+", str(sample))[0]))
-
+    
     # fit slopes to chosen kinetics model
     xfit = np.linspace(min(x), max(x), 100)
+    
     if model_select.value == 'Michaelis-Menten':
         popt, pcov = curve_fit(mmfit, x, y)
         yfit = mmfit(xfit, *popt)
@@ -159,7 +163,6 @@ def fit_slopes(database):
         model.title.text_font_size = '10pt'
     data = pd.DataFrame({'x' : x, 'y' : y}).sort_values('x') # points for scatter
     fit = pd.DataFrame({'xfit' : xfit, 'yfit' : yfit}).sort_values('xfit')
-
     return data, fit
 
 def refit_slopes(slope_data):
@@ -357,11 +360,9 @@ def file_callback(attrname, old, new):
     model = figure(title="Model Fit", x_axis_label="Concentration", y_axis_label="Rate",
                    plot_width=350, plot_height=300, tools=tools_model)
     model.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
-
     global slope_data, slope_data_fit
     slope_data, slope_data_fit = fit_slopes(exp_database)
     slope_data = slope_data.sort_values('x')
-
     # set up widgets
     x_sample_guess = ' '
     blank_sample_guess = ' '
@@ -376,7 +377,6 @@ def file_callback(attrname, old, new):
                 blank_sample_guess = s
         except:
             pass
-
     file_source = ColumnDataSource({'file_contents':[], 'file_name':[]})
     file_source.on_change('data', file_callback)
     global upload_button
@@ -466,7 +466,7 @@ def file_callback(attrname, old, new):
     offset_time.on_change('value', update_tickers)
     start_time.on_change('value', update_time)
     end_time.on_change('value', update_time)
-
+    
     # document formatting
     desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1400)
     widgets = widgetbox(model_select, sample_select, x_sample_choice,
