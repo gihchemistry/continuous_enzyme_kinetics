@@ -1,479 +1,286 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Jun 16 17:12:32 2018
-
-@author: molp
-"""
-
-#from functools import lru_cache
-
-from os import listdir
+import continuous_kinetics as ck
 from os.path import dirname, join
-
-import re
-import math
-import numpy as np
-import pandas as pd
-from scipy.optimize import curve_fit
-from scipy.interpolate import UnivariateSpline
-
-from bokeh.io import curdoc
-from bokeh.layouts import row, column, widgetbox, layout
-from bokeh.models import ColumnDataSource, CustomJS, HoverTool, Div, BasicTickFormatter
-from bokeh.models.widgets import DataTable, Select, TableColumn, Button, TextInput, RadioButtonGroup, RangeSlider
-from bokeh.plotting import figure
-
 from io import StringIO
 import base64
-
-fit_choice = RadioButtonGroup(labels=["Maximize Slope Magnitude", "Linear Fit", "Logarithmic Fit"], active=0, width=375)
-fit_choice_dict = {}
-
-# equations & methods for curve fitting
-
-def linear(x, m , b):
-    '''
-    linear equation for raw data samples
-    '''
-    return m*x + b
-
-def logarithmic(x, yo, b, to):
-    '''
-    logarithmic equation from Lu & Fei et. al, 2003
-    '''
-    return yo + b*np.log(1 + x*to)
-
-def mmfit(x, km, vmax):
-    '''
-    Michaelis Menten equation
-    '''
-    return vmax * x / (km + x)
-
-def icfit(x, bottom, top, IcFifty):
-    '''
-    IC50 equation
-    '''
-    return bottom + (top-bottom)/(1+(x/IcFifty))
-
-def subtract_blank(data, sample):
-    '''
-    subtract blank sample slope from model y-values
-    '''
-    value = float(re.findall(r"[-+]?\d*\.\d+|\d+", str(sample))[0])
-    new_y = data.y - data[data.x == value].y.values[0]
-    data.y = new_y
-    return data
-
-# methods for data import and analysis
-
-def get_data(x, y):
-    data = df[[x, y]]
-    data.columns = ['x', 'y']
-    return data
-
-def fit_linear(x, y):
-    xvalues = np.array(x)
-    yvalues = np.array(y)
-    popt, pcov = curve_fit(linear, xvalues, yvalues)
-    xix = [min(x), max(x)] # plot line across entire range of x
-    xfit = np.linspace(xix[0], xix[1], len(xvalues))
-    yfit = linear(xfit, *popt)
-    fit = pd.DataFrame({'xfit' : xfit, 'yfit' : yfit})
-    residuals = np.array(fit.yfit) - yvalues
-
-    return popt[0], fit, residuals
-
-def fit_raw(x, y):
-    x = np.array(x)
-    y = np.array(y)
-    # smooth data
-    yfit = UnivariateSpline(x, y)(x)
-    # find steepest part of curve
-    derivative = np.abs(np.diff(yfit)/np.diff(x))
-    threshold = 0.7*(np.max(derivative)-np.min(derivative))+np.min(derivative)
-    ix_arr = np.where(derivative > threshold)[0]
-    while len(ix_arr) < 4:
-        threshold = threshold*.9
-        ix_arr = np.where(derivative > threshold)[0]
-    ix_arr = list(np.sort(np.array(ix_arr)))
-    xvalues, yvalues = x[ix_arr], y[ix_arr]
-    tmp_df = pd.DataFrame(data={'x' : xvalues, 'y' : yvalues})
-    tmp_df = tmp_df.sort_values('x')
-    xvalues, yvalues = tmp_df.x, tmp_df.y
-    popt, pcov = curve_fit(linear, xvalues, yvalues)
-    xix = [min(x), max(x)] # plot line across entire range of x
-    xfit = np.linspace(xix[0], xix[1], len(yfit))
-    yfit = linear(xfit, *popt)
-    fit = pd.DataFrame({'xfit' : xfit, 'yfit' : yfit})
-    residuals = np.array(yfit) - y
-
-    return popt[0], fit, residuals
-
-def fit_raw_logarithmic(x, y):
-    x = np.array(x)
-    y = np.array(y)
-    n = 0
-    try:
-        n = eval(offset_time.value)
-    except:
-        pass
-    x = np.array([i+n for i in x])
-    popt, pcov = curve_fit(logarithmic, x, y, maxfev=100000)
-    #slope = popt[1]/popt[2]*0.001
-    xix = [np.min(x), np.max(x)] # plot line across entire range of x
-    xfit = np.linspace(0, xix[1], len(x))
-    yfit = logarithmic(xfit, *popt)
-    slope = np.mean((np.diff(yfit)/np.diff(xfit))[:n+1])
-    xfit = [xi-n for xi in xfit]
-    fit = pd.DataFrame({'xfit' : xfit, 'yfit' : yfit})
-    residuals = np.array(fit.yfit) - y
-
-    return slope, fit, residuals
-
-def fit_slopes(database):
-
-    # gather concentrtions and slopes for x and y axes respectively
-    x, y = [], []
-    for sample in list(database):
-        if any(char.isdigit() for char in str(sample)) == True:
-            # linear fit and get slope
-            sample_data = database[sample]
-            xtmp, ytmp = sample_data[list(sample_data)[0]], sample_data[list(sample_data)[1]]
-            if fit_choice_dict[sample] == 0:
-                slope, linear_fit, residuals = fit_raw(xtmp, ytmp)
-            elif fit_choice_dict[sample] == 2:
-                slope, linear_fit, residuals = fit_raw_logarithmic(xtmp, ytmp)
-            elif fit_choice_dict[sample] == 1:
-                slope, linear_fit, residuals = fit_linear(xtmp, ytmp)
-            y.append(np.abs(slope))
-            x.append(float(re.findall(r"[-+]?\d*\.\d+|\d+", str(sample))[0]))
+import pandas as pd
+import numpy as np
+from bokeh.io import curdoc
+from bokeh.layouts import row, column, widgetbox, layout
+from bokeh.models import ColumnDataSource, CustomJS, HoverTool, Div, BasicTickFormatter, Whisker
+from bokeh.models.widgets import RadioButtonGroup, Select, TextInput, Button, DataTable, TableColumn, RangeSlider, Slider, HTMLTemplateFormatter
+from bokeh.plotting import figure
     
-    # fit slopes to chosen kinetics model
-    xfit = np.linspace(min(x), max(x), 100)
+########## bokeh methods ##########
     
-    if model_select.value == 'Michaelis-Menten':
-        popt, pcov = curve_fit(mmfit, x, y)
-        yfit = mmfit(xfit, *popt)
-        model.title.text='Vmax = %.2e, Km = %.1e' % tuple(popt[::-1])
-        model.title.text_font_size = '10pt'
-    elif model_select.value == 'EC50/IC50':
-        popt, pcov = curve_fit(icfit, x, y)
-        yfit = icfit(xfit, *popt)
-        model.title.text='EC50/IC50 = %.2e' % tuple([popt[2]])
-        model.title.text_font_size = '10pt'
-    data = pd.DataFrame({'x' : x, 'y' : y}).sort_values('x') # points for scatter
-    fit = pd.DataFrame({'xfit' : xfit, 'yfit' : yfit}).sort_values('xfit')
-    return data, fit
-
-def refit_slopes(slope_data):
-    x = slope_data.x
-    y = slope_data.y
-
-    # fit slopes to chosen kinetics model
-    xfit = np.linspace(min(x), max(x), 100)
-    if model_select.value == 'Michaelis-Menten':
-        popt, pcov = curve_fit(mmfit, x, y)
-        yfit = mmfit(xfit, *popt)
-        model.title.text=r'Vmax = %.2e, Km = %.2e' % tuple(popt[::-1])
-        model.title.text_font_size = '10pt'
-    elif model_select.value == 'EC50/IC50':
-        popt, pcov = curve_fit(icfit, x, y)
-        yfit = icfit(xfit, *popt)
-        model.title.text='EC50/IC50 = %.2e' % tuple([popt[2]])
-        model.title.text_font_size = '10pt'
-    data = pd.DataFrame({'x' : x, 'y' : y}).sort_values('x') # points for scatter
-    fit = pd.DataFrame({'xfit' : xfit, 'yfit' : yfit}).sort_values('xfit')
-
-    return data, fit
-
-# bokeh methods
-
-def update_tickers(attrname, old, new):
+def widget_callback(attrname, old, new):
+    
+    range_slider.value = (float(start_time.value), float(end_time.value))
+    
     update()
 
-def update_range_slider(attrname, old, new):
-    range_slider.start=df[x_sample_choice.value].values[0]
-    range_slider.end=df[x_sample_choice.value].values[-1]
-    range_slider.value=(df[x_sample_choice.value].values[0], df[x_sample_guess].values[-1])
-    range_slider.step=step=df[x_sample_choice.value].values[1]-df[x_sample_guess].values[0]
+def sample_callback(attrname, old, new):
+
+    if start_time.value != range_slider.start or end_time.value != range_slider.end:
+        start_time.value = str(range_slider.start)
+        end_time.value = str(range_slider.end)
     update()
+    
+def slider_callback(attrname, old, new):
+    
+    if float(start_time.value) != range_slider.value[0] or float(end_time.value) != range_slider.value[1]: 
+        start_time.value = str(range_slider.value[0])
+        end_time.value = str(range_slider.value[1])
 
-def update_time(attrname, old, new):
-    if range_slider.value[0] != float(start_time.value) or range_slider.value[1] != float(end_time.value):
-        x = x_sample_choice.value
-        y = sample_select.value
-        data = get_data(x, y)
-
-        #data = data.sort_values('x')
-        selected_start = min(enumerate(list(data['x'].values)), key=lambda x: abs(x[1]-float(start_time.value)))[1]
-        selected_end = min(enumerate(list(data['x'].values)), key=lambda x: abs(x[1]-float(end_time.value)))[1]
-        range_slider.value=(selected_start, selected_end)
+def threshold_callback(attrname, old, new):
+    
+    if experiment_db['model'] == 'High-Throughput Screen':
+        std = np.std(model_data_source.data['y'])
+        avg = np.mean(model_data_source.data['y'])
+        color, colort = [], []
+        for r in model_data_source.data['y']:
+            if r >= avg + std*threshold_slider.value:
+                color.append('red')
+                colort.append('#EC7063')
+            elif r <= avg - std*threshold_slider.value:
+                color.append('blue')
+                colort.append('#5DADE2')
+            else:
+                color.append('grey')
+                colort.append('white')
+        model_data_source.data['c'] = color
+        model_data_source.data['ct'] = colort
 
 def update():
-    # update raw plot
-    x = x_sample_choice.value
-    y = sample_select.value
-    data = get_data(x, y)
-    data = data.sort_values('x')
 
-    selected_start = list(data['x'].values)[0]
-    selected_end = list(data['x'].values)[-1]
-    range_slider.value=(selected_start, selected_end)
-    start_time.value=str(list(data['x'].values)[0])
-    end_time.value=str(list(data['x'].values)[-1])
+    # get selections
+    fit_routine = fit_button.active
+    model_eq = model_select.value
+    subtract = subtract_select.value
+    sample = sample_select.value
+    transform = transform_input.value
+    offset = offset_input.value
+    threshold = threshold_slider.value
+    start = start_time.value
+    end = end_time.value
 
-    source_raw.data = data[['x', 'y']].to_dict('list')
-    if fit_choice_dict[sample_select.value] == 0:
-        slope, raw_fit, residuals = fit_raw(data.x, data.y)
-    elif fit_choice_dict[sample_select.value] == 2:
-        slope, raw_fit, residuals = fit_raw_logarithmic(data.x, data.y)
-    elif fit_choice_dict[sample_select.value] == 1:
-        slope, raw_fit, residuals = fit_linear(data.x, data.y)
-    raw_fit = raw_fit.sort_values('xfit')
-
-    source_raw_line.data = raw_fit[['xfit', 'yfit']].to_dict('list')
-
-    xr = np.array(raw_fit[['xfit']].values.T[0])
-    yr = np.array(residuals)
-    resi_df = pd.DataFrame(data={'xr' : xr, 'yr' : yr})
-    source_resi.data = resi_df[['xr', 'yr']].to_dict('list')
-
-    # update model plot & data table
-    slope_data, slope_data_fit = fit_slopes(exp_database)
-
-    if subtract_sample_choice.value != ' ':
-        tmp_data = subtract_blank(slope_data, subtract_sample_choice.value)
-        slope_data, slope_data_fit = refit_slopes(tmp_data)
-    if transform.value != " ":
-        transform_string = transform.value.replace('x', 'slope_data.y')
-        tmp_data = slope_data
-        tmp_data.y = eval(transform_string)
-        slope_data, slope_data_fit = refit_slopes(tmp_data)
-
-    slope_data = slope_data.sort_values('x')
-
-    slope_data_fit = slope_data_fit.sort_values('xfit')
-
-    source_data_table.data = slope_data[['x', 'y']].to_dict('list')
-
-    source_model.data = slope_data[['x', 'y']].to_dict('list')
-
-    source_model_line.data = slope_data_fit[['xfit', 'yfit']].to_dict('list')
-
-
-def selection_change(attrname, old, new):
-    fit_choice_dict[sample_select.value] = fit_choice.active
-
-    # select range of current raw plot data
-    x = x_sample_choice.value
-    y = sample_select.value
-    data = get_data(x, y)
-
-    #data = data.sort_values('x')
-    selected_start = min(range(len(list(data['x'].values))), key=lambda i: abs(list(data['x'].values)[i]-range_slider.value[0]))
-    selected_end = min(range(len(list(data['x'].values))), key=lambda i: abs(list(data['x'].values)[i]-range_slider.value[1]))
-    start_time.value=str(range_slider.value[0])
-    end_time.value=str(range_slider.value[1])
-    selected = list(range(selected_start, selected_end))
-    if len(selected) > 0:
-        # subset data according to selected range
-        tmp_data = data.iloc[selected, :].reset_index(drop=True)
-        tmp_data = tmp_data.sort_values('x')
+    # update database
+    experiment_db[sample+'_fit'] = fit_routine
+    experiment_db['model'] = model_eq
+    
+    # progress curve analysis
+    pdf = experiment_df[[experiment_df.columns[0], sample]]
+    experiment_db[sample] = ck.progress_curve(pdf)
+    if fit_routine == 0:
+        progress_data = experiment_db[sample].spline(start, end)
+        experiment_db[sample].spline = progress_data
+    elif fit_routine == 1:
+        progress_data = experiment_db[sample].linear(start, end)
+        experiment_db[sample].linear = progress_data
     else:
-        tmp_data = data
-        tmp_data = tmp_data.sort_values('x')
+        try:
+            offset = float(offset)
+        except:
+            pass
+        progress_data = experiment_db[sample].logarithmic(start, end, offset)
+        experiment_db[sample].logarithmic = progress_data
 
-        # re-fit straight line based on selection
-    if fit_choice_dict[sample_select.value] == 0:
-        slope, new_fit, residuals = fit_raw(tmp_data.x, tmp_data.y)
-    elif fit_choice_dict[sample_select.value] == 2:
-        slope, new_fit, residuals = fit_raw_logarithmic(tmp_data.x, tmp_data.y)
-    elif fit_choice_dict[sample_select.value] == 1:
-        slope, new_fit, residuals = fit_linear(tmp_data.x, tmp_data.y)
-    new_fit = new_fit.sort_values('xfit')
-    source_raw_line.data = new_fit[['xfit', 'yfit']].to_dict('list')
+    raw_source.data = pd.DataFrame(data=dict(x=progress_data['x'], 
+                                             y=progress_data['y'], 
+                                             yr=progress_data['resi'], 
+                                             yfit=progress_data['yfit'])).to_dict('list')
 
-    xr = np.array(new_fit[['xfit']].values.T[0])
-    yr = np.array(residuals)
-    resi_df = pd.DataFrame(data={'xr' : xr, 'yr' : yr})
-    source_resi.data = resi_df[['xr', 'yr']].to_dict('list')
+    # model analysis
+    model_dict = ck.kinetic_model(experiment_db)
+    model_result = model_dict.model(subtract, transform, threshold)
+    model_data_source.data = pd.DataFrame(data=dict(x=model_result['x'], y=model_result['y'],
+                                                    u=model_result['u'], l=model_result['l'],
+                                                    e=model_result['e'], n=model_result['n'],
+                                                    c=model_result['c'], ct=model_result['ct'],
+                                                    yt=model_result['yt'])).to_dict('list')
+    model_fit_source.data = pd.DataFrame(data=dict(x=model_result['xfit'], 
+                                                   y=model_result['yfit'])).to_dict('list')
+    if experiment_db['model'] == 'Michaelis-Menten':
+        mm_source.data = pd.DataFrame(data=dict(Km=model_result['Km'], 
+                                                Vmax=model_result['Vmax']), index=['value', 'error']).to_dict('list')
+        ic_source.data = pd.DataFrame(data=dict(Bottom=[], Top=[], Slope=[], IcFifty=[])).to_dict('list')
+        model.xaxis.axis_label = 'Concentration'
+    elif experiment_db['model'] == 'EC50/IC50':
+        ic_source.data = pd.DataFrame(data=dict(Bottom=model_result['Bottom'], Top=model_result['Top'],
+                                           Slope=model_result['Slope'], 
+                                            IcFifty=model_result['IcFifty']), index=['value', 'error']).to_dict('list')
+        mm_source.data = pd.DataFrame(data=dict(Km=[], Vmax=[])).to_dict('list')
+        model.xaxis.axis_label = 'Concentration'
+    else:
+        mm_source.data = pd.DataFrame(data=dict(Km=[], Vmax=[])).to_dict('list')
+        ic_source.data = pd.DataFrame(data=dict(Bottom=[], Top=[], Slope=[], IcFifty=[])).to_dict('list')
+        model.xaxis.axis_label = 'Sample #'
+        
+def load_page(experiment_df, experiment_db):
+    
+    ########## bokeh plots ##########
 
-    # re-fit model based on selection
-    exp_database[y] = tmp_data
+    # general plot tools
+    plot_tools = 'wheel_zoom, pan, reset, save, hover'
+    hover = HoverTool(tooltips=[("(x,y)", "($x, $y)")])
 
-    slope_data, slope_data_fit = fit_slopes(exp_database)
+    # progress curve plots
+    global raw_source
+    raw_source = ColumnDataSource(data=dict(x=[], y=[], yr=[], yfit=[]))
 
-    if subtract_sample_choice.value != ' ':
-        tmp_data = subtract_blank(slope_data, subtract_sample_choice.value)
-        slope_data, slope_data_fit = refit_slopes(tmp_data)
-    slope_data = slope_data.sort_values('x')
-    if transform.value != " ":
-        transform_string = transform.value.replace('x', 'slope_data.y')
-        tmp_data = slope_data
-        tmp_data.y = eval(transform_string)
-        slope_data, slope_data_fit = refit_slopes(tmp_data)
-    source_data_table.data = slope_data[['x', 'y']].to_dict('list')
-    source_model.data = slope_data[['x', 'y']].to_dict('list')
-    source_model_line.data = slope_data_fit[['xfit', 'yfit']].to_dict('list')
+    global raw
+    raw = figure(title="Initial Rate Fit", x_axis_label="Time", y_axis_label="Signal",
+                 plot_width=350, plot_height=300, tools=plot_tools)
+    raw.circle('x', 'y', size=2, source=raw_source, color='gray',
+                selection_color="black", alpha=0.6, nonselection_alpha=0.2, selection_alpha=0.6)
+    raw.line('x', 'yfit', source=raw_source, color='red')
 
-def file_callback(attrname, old, new):
-    global fit_choice
-    fit_choice = RadioButtonGroup(labels=["Maximize Slope Magnitude", "Linear", "Logarithmic"], active=0, width=375)
-    global fit_choice_dict
-    fit_choice_dict = {}
-    global file_source
-    global filename
-    filename=file_source.data['file_name']
-    # read data file
-    global output_filename
-    output_filename = filename[0]+'-out.csv'
-    raw_contents = file_source.data['file_contents'][0]
-    prefix, b64_contents = raw_contents.split(",", 1)
-    file_contents = base64.b64decode(b64_contents)
-    file_contents = file_contents.decode("utf-8-sig")
-    file_io = StringIO(file_contents)
-    global df
-    df = pd.read_csv(file_io)
-    df = df.dropna(axis=1)
-    sample_names = list(df)
-    string_names = [str(i).strip(' ') for i in sample_names]
-    df.columns = string_names
-    global exp_database
-    exp_database = {}
-    for sample in list(df)[1:]:
-        exp_database[sample] = df[[list(df)[0], sample]]
-        fit_choice_dict[sample] = 0
-    global model_select
-    model_select = Select(title='Choose Model', value='Michaelis-Menten', options=['Michaelis-Menten', 'EC50/IC50'], width=350)
-    global source_model
-    source_model = ColumnDataSource(data=dict(x=[], y=[]))
-    global source_model_line
-    source_model_line = ColumnDataSource(data=dict(xfit=[], yfit=[]))
+    global resi
+    resi = figure(title="Initial Rate Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
+                 plot_width=700, plot_height=200, tools='wheel_zoom,pan,reset')
+    resi.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
+    resi.circle('x', 'yr', size=5, source=raw_source, color='grey', alpha=0.6)
 
-    tools_model = 'wheel_zoom,pan,reset,save, hover'
-
-    hover = HoverTool(tooltips=[
-        ("(x,y)", "($x, $y)")
-    ])
-
+    # model plot for titration experiments
+    global model_data_source
+    model_data_source = ColumnDataSource(data=dict(x=[], y=[], l=[], u=[], n=[], c=[]))
+    global model_fit_source
+    model_fit_source = ColumnDataSource(data=dict(x=[], y=[]))
     global model
-    model = figure(title="Model Fit", x_axis_label="Concentration", y_axis_label="Rate",
-                   plot_width=350, plot_height=300, tools=tools_model)
-    model.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
-    global slope_data, slope_data_fit
-    slope_data, slope_data_fit = fit_slopes(exp_database)
-    slope_data = slope_data.sort_values('x')
-    # set up widgets
-    x_sample_guess = ' '
-    blank_sample_guess = ' '
-    for s in list(df):
-        try:
-            if 'ime' in s:
-                x_sample_guess = s
-        except:
-            pass
-        try:
-            if 'lank' in s:
-                blank_sample_guess = s
-        except:
-            pass
+    model = figure(title='Model Fit', x_axis_label='Concentration', y_axis_label='Rate', plot_width=350,
+                  plot_height=300, tools=plot_tools)
+    model.circle('x', 'y', size=8, source=model_data_source, color='c', alpha=0.6)
+    model.add_layout(Whisker(source=model_data_source, base='x', upper='u', lower='l'))
+    model.line('x', 'y', source=model_fit_source, line_width=3, color='black', alpha=0.4)
+    
+    ########## bokeh widgets ##########
+
+    # button for selecting progress curve fitting routine
+    global fit_button
+    fit_button = RadioButtonGroup(labels=['Maximize Slope Magnitude', 'Linear Fit', 
+                                                'Logarithmic Fit'], active=0, width=375)
+    fit_button.on_change('active', widget_callback)
+
+    # dropdown menu for selecting titration experiment model
+    global model_select
+    model_select = Select(title='Choose Model', value='Michaelis-Menten', 
+                          options=['Michaelis-Menten', 'EC50/IC50', 'High-Throughput Screen'], width=350)
+    model_select.on_change('value', widget_callback)
+
+    # dropdown menu for selecting blank sample to subtract from remaining titration samples 
+    global subtract_select
+    subtract_select = Select(title='Select Blank Sample for Subtraction', value='',
+                                 options=list(experiment_df)[1:]+[''], width=350)
+    subtract_select.on_change('value', widget_callback)
+
+    # dropdown menu for selecting titration sample to plot in current view
+    global sample_select
+    sample_select = Select(title='Y Axis Sample', value=list(experiment_df)[1], 
+                           options=list(experiment_df)[1:]+[''], width=350)
+    sample_select.on_change('value', sample_callback)
+
+    # text input box for transforming slopes to rates
+    global transform_input
+    transform_input = TextInput(value='', title="Enter Transform Equation", width=350)
+    transform_input.on_change('value', widget_callback)
+
+    # text input box for setting delay time in logarithmic progress curve fitting
+    global offset_input
+    offset_input = TextInput(value='', title="Enter Time Between Mixing and First Read", width=350)
+    offset_input.on_change('value', widget_callback)
+
+    # text input boxes for progress curve xrange selection
+    global start_time
+    start_time = TextInput(value=str(experiment_df[list(experiment_df)[0]].values[0]), title="Start Time")
+    global end_time
+    end_time = TextInput(value=str(experiment_df[list(experiment_df)[0]].values[-1]), title='End Time')
+    start_time.on_change('value', widget_callback)
+    end_time.on_change('value', widget_callback)
+    
+    # range slider to select threshold for hit detection in HTS mode
+    global threshold_slider
+    threshold_slider = Slider(start=0, end=5, value=2, step=0.1, 
+                    title='HTS Hit Threshold (Standard Deviation)', width=350)
+    threshold_slider.on_change('value', threshold_callback)
+    
+    # range slider to update plots according to progress cuve xrange selection
+    xmin = experiment_df[experiment_df.columns[0]].values[0]
+    xmax = experiment_df[experiment_df.columns[0]].values[-1]
+    global range_slider
+    range_slider = RangeSlider(start=xmin, end=xmax, value=(xmin, xmax),
+                    step=experiment_df[experiment_df.columns[0]].values[1]-xmin, 
+                    title='X-Axis Range', width=650)
+    range_slider.on_change('value', slider_callback)
+
+    # button to upload local data file
+    global file_source
     file_source = ColumnDataSource({'file_contents':[], 'file_name':[]})
     file_source.on_change('data', file_callback)
-    global upload_button
-    upload_button = Button(label="Upload Local File", button_type="success", width=350)
-    upload_button.callback = CustomJS(args=dict(file_source=file_source),
-                               code=open(join(dirname(__file__), "upload.js")).read())
-    global x_sample_choice
-    x_sample_choice = Select(title='X Axis Column', value=x_sample_guess, options=string_names+[' '], width=350)
-    global subtract_sample_choice
-    subtract_sample_choice = Select(title='Select Blank Sample for Subtraction', value=blank_sample_guess, options=string_names+[' '], width=350)
-    global sample_select
-    sample_select = Select(title='Y Axis Sample', value=string_names[1], options=string_names+[' '], width=350)
-    global transform
-    transform = TextInput(value=" ", title="Enter Transform Equation", width=350)
-    global offset_time
-    offset_time = TextInput(value=" ", title="Enter Time Between Mixing and First Read", width=350)
-
-    global source_data_table
-    source_data_table = ColumnDataSource(slope_data)
-    columns = [
-            TableColumn(field="x", title="Concentration"),
-            TableColumn(field="y", title="Slope (Initial Rate)"),
-        ]
-    global data_table
-    data_table = DataTable(source=source_data_table, columns=columns, width=350, height=450, selectable=True, editable=True)
-    global download_button
-    download_button = Button(label="Download Table to CSV", button_type="primary", width=350)
-
     try:
         output_filename = file_source.data['file_name']+'-out.csv'
     except:
         output_filename = 'output.csv'
-    download_button.callback = CustomJS(args=dict(source=source_data_table, file_name=output_filename),
-                               code=open(join(dirname(__file__), "download.js")).read())
+    global upload_button
+    upload_button = Button(label="Upload Local File", button_type="success", width=350)
+    upload_button.callback = CustomJS(args=dict(file_source=file_source),
+                               code=open(join(dirname(__file__), "upload.js")).read())
+
+    # table containing rate fits and errors
+    template="""
+    <div style="background:<%=ct%>"; color="white";>
+    <%= value %></div>
+    """
+    formatter = HTMLTemplateFormatter(template=template)
+    columns = [
+        TableColumn(field='n', title='Sample'),
+        TableColumn(field='yt', title='Slope (Initial Rate)', formatter=formatter),
+        TableColumn(field='e', title='Std. Error')
+    ]
+    global rate_table
+    rate_table = DataTable(source=model_data_source, columns=columns, width=350, height=500,
+                           selectable=True, editable=True)
+
+    # tables containing model fits and errors
+    global mm_source
+    mm_source = ColumnDataSource({'Km':[], 'Vmax':[]})
+    columns = [
+        TableColumn(field='Km', title='Km'),
+        TableColumn(field='Vmax', title='Vmax')
+    ]
+    global mm_table
+    mm_table = DataTable(source=mm_source, columns=columns, width=350, height=100,
+                           selectable=True, editable=True)
+    global ic_source
+    ic_source = ColumnDataSource({'Bottom':[], 'Top':[], 'Slope':[], 'IcFifty':[]})
+    columns = [
+        TableColumn(field='Bottom', title='Bottom'),
+        TableColumn(field='Top', title='Top'),
+        TableColumn(field='Slope', title='Slope'),
+        TableColumn(field='IcFifty', title='IC50/EC50')
+    ]
+    global ic_table
+    ic_table = DataTable(source=ic_source, columns=columns, width=350, height=100,
+                           selectable=True, editable=True)
+
+    # button for copying rate data table to clipboard
     global copy_button
     copy_button = Button(label="Copy Table to Clipboard", button_type="primary", width=350)
-    copy_button.callback = CustomJS(args=dict(source=source_data_table),
+    copy_button.callback = CustomJS(args=dict(source=model_data_source),
                                code=open(join(dirname(__file__), "copy.js")).read())
 
-    # configure plots
-    global source_resi
-    source_resi = ColumnDataSource(data=dict(xr=[], yr=[]))
-    global resi
-    resi = figure(title="Progress Curve Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
-             plot_width=700, plot_height=200, tools='wheel_zoom,pan,reset')
-    resi.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
-    resi.circle('xr', 'yr', size=5, source=source_resi, color='grey', alpha=0.6)
+    # button for downloading rate data table to local csv file
+    global download_button
+    download_button = Button(label="Download Table to CSV", button_type="primary", width=350)
+    download_button.callback = CustomJS(args=dict(source=model_data_source, file_name=output_filename),
+                               code=open(join(dirname(__file__), "download.js")).read())
 
-    global source_raw
-    source_raw = ColumnDataSource(data=dict(x=[], y=[]))
-    global source_raw_line
-    source_raw_line = ColumnDataSource(data=dict(xfit=[], yfit=[]))
-    tools_raw = 'wheel_zoom,pan,reset,save'
-    global raw
-    raw = figure(title="Progress Curve Fit", x_axis_label="Time", y_axis_label="Signal",
-                 plot_width=350, plot_height=300, tools=tools_raw)
+    ########## document formatting #########
 
-    raw.circle('x', 'y', size=2, source=source_raw, color='gray',
-                selection_color="black", alpha=0.6, nonselection_alpha=0.2, selection_alpha=0.6)
-    raw.line('xfit', 'yfit', source=source_raw_line, color='red')
-
-    source_model.data = slope_data[['x', 'y']].to_dict('list')
-    source_model_line.data = slope_data_fit[['xfit', 'yfit']].to_dict('list')
-
-    model.circle('x', 'y', size=8, source=source_model, color='grey', alpha=0.6)
-    model.line('xfit', 'yfit', source=source_model_line, line_width=3, color='black', alpha=0.4)
-
-    # update plots according to raw data selection
-    global range_slider
-    range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
-                    value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
-                    step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
-                    title='X-Axis Range', width=650)
-    range_slider.on_change('value', selection_change)
-    global start_time
-    global end_time
-    start_time = TextInput(value=str(df[x_sample_guess].values[0]), title="Start Time")
-    end_time = TextInput(value=str(df[x_sample_guess].values[-1]), title='End Time')
-
-    # update plots based on ticker selections
-    fit_choice.on_change('active', selection_change)
-    x_sample_choice.on_change('value', update_tickers)
-    subtract_sample_choice.on_change('value', update_tickers)
-    sample_select.on_change('value', update_tickers)
-    model_select.on_change('value', update_tickers)
-    transform.on_change('value', update_tickers)
-    offset_time.on_change('value', update_tickers)
-    start_time.on_change('value', update_time)
-    end_time.on_change('value', update_time)
-    
-    # document formatting
     desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1400)
-    widgets = widgetbox(model_select, sample_select, x_sample_choice,
-                        subtract_sample_choice, transform, offset_time)
-    table = widgetbox(data_table)
 
-    main_row = row(column(upload_button, fit_choice, widgets),
+    widgets = widgetbox(model_select, sample_select, subtract_select, 
+                        transform_input, offset_input)
+    table = widgetbox(rate_table)
+    main_row = row(column(upload_button, fit_button, widgets, threshold_slider, mm_table, ic_table),
                     column(row(raw, model), resi, range_slider, row(start_time, end_time)),
                     column(download_button, copy_button, table))
 
@@ -482,157 +289,52 @@ def file_callback(attrname, old, new):
         [desc],
         [main_row]
     ], sizing_mode=sizing_mode)
-    curdoc().clear()
-    curdoc().add_root(l)
-    curdoc().title = "Kinetics"
 
     update()
+    curdoc().clear()
+    curdoc().add_root(l)
+    curdoc().title = "continuous-kinetics"    
+        
+def file_callback(attrname, old, new):
+    
+    # decode data
+    raw_contents = file_source.data['file_contents'][0]
+    prefix, b64_contents = raw_contents.split(',', 1)
+    file_contents = base64.b64decode(b64_contents).decode('utf-8-sig')
+    file_io = StringIO(file_contents)
+    
+    # update dataframe
+    global experiment_df
+    experiment_df = pd.read_csv(file_io)
+    experiment_df.columns = [str(i) for i in list(experiment_df)]
+    
+    # update database
+    global experiment_db
+    experiment_db = {'model' : 'Michaelis-Menten'}
+    xmin = experiment_df[experiment_df.columns[0]].values[0]
+    xmax = experiment_df[experiment_df.columns[0]].values[-1]
+    for s in experiment_df.columns[1:]:
+        df = experiment_df[[experiment_df.columns[0], s]]
+        experiment_db[s] = ck.progress_curve(df)
+        experiment_db[s+'_fit'] = 0
+        experiment_db[s].spline(xmin, xmax)
+    
+    # reload page
+    load_page(experiment_df, experiment_db)
 
-# read data file
-data_file = join(dirname(__file__), 'test.csv')
-df = pd.read_csv(data_file)
-sample_names = list(df)
-string_names = [str(i) for i in sample_names]
-df.columns = string_names
-exp_database = {}
-for sample in list(df)[1:]:
-    exp_database[sample] = df[[list(df)[0], sample]]
-    fit_choice_dict[sample] = 0
+########## import sample data ##########
 
-model_select = Select(title='Choose Model', value='Michaelis-Menten', options=['Michaelis-Menten', 'EC50/IC50'], width=350)
+experiment_file = join(dirname(__file__), 'test.csv')
+experiment_df = pd.read_csv(experiment_file)
+experiment_df.columns = [str(i) for i in list(experiment_df)]
+experiment_db = {'model' : 'Michaelis-Menten'}
+xmin = experiment_df[experiment_df.columns[0]].values[0]
+xmax = experiment_df[experiment_df.columns[0]].values[-1]
+for s in experiment_df.columns[1:]:
+    df = experiment_df[[experiment_df.columns[0], s]]
+    experiment_db[s] = ck.progress_curve(df)
+    experiment_db[s+'_fit'] = 0
+    experiment_db[s].spline(xmin, xmax)
 
-source_model = ColumnDataSource(data=dict(x=[], y=[]))
-
-source_model_line = ColumnDataSource(data=dict(xfit=[], yfit=[]))
-
-tools_model = 'wheel_zoom,pan,reset,save, hover'
-
-hover = HoverTool(tooltips=[
-    ("(x,y)", "($x, $y)")
-])
-
-model = figure(title="Spline Model Fit", x_axis_label="Concentration", y_axis_label="Rate",
-               plot_width=350, plot_height=300, tools=tools_model)
-model.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
-
-slope_data, slope_data_fit = fit_slopes(exp_database)
-
-slope_data = slope_data.sort_values('x')
-
-# set up widgets
-x_sample_guess = ' '
-blank_sample_guess = ' '
-for s in list(df):
-    try:
-        if 'ime' in s:
-            x_sample_guess = s
-    except:
-        pass
-    try:
-        if 'lank' in s:
-            blank_sample_guess = s
-    except:
-        pass
-
-file_source = ColumnDataSource({'file_contents':[], 'file_name':[]})
-file_source.on_change('data', file_callback)
-upload_button = Button(label="Upload Local File", button_type="success", width=350)
-upload_button.callback = CustomJS(args=dict(file_source=file_source),
-                           code=open(join(dirname(__file__), "upload.js")).read())
-
-x_sample_choice = Select(title='X Axis Column', value=x_sample_guess, options=string_names+[' '], width=350)
-subtract_sample_choice = Select(title='Select Blank Sample for Subtraction', value=blank_sample_guess, options=string_names+[' '], width=350)
-sample_select = Select(title='Y Axis Sample', value=string_names[1], options=string_names+[' '], width=350)
-transform = TextInput(value=" ", title="Enter Transform Equation", width=350)
-offset_time = TextInput(value=" ", title="Enter Time Between Mixing and First Read", width=350)
-
-source_data_table = ColumnDataSource(slope_data)
-columns = [
-        TableColumn(field="x", title="Concentration"),
-        TableColumn(field="y", title="Slope (Initial Rate)"),
-    ]
-
-data_table = DataTable(source=source_data_table, columns=columns, width=350, height=450, selectable=True, editable=True)
-
-download_button = Button(label="Download Table to CSV", button_type="primary", width=350)
-try:
-    output_filename = file_source.data['file_name']+'-out.csv'
-except:
-    output_filename = 'output.csv'
-download_button.callback = CustomJS(args=dict(source=source_data_table, file_name=output_filename),
-                           code=open(join(dirname(__file__), "download.js")).read())
-
-copy_button = Button(label="Copy Table to Clipboard", button_type="primary", width=350)
-copy_button.callback = CustomJS(args=dict(source=source_data_table),
-                           code=open(join(dirname(__file__), "copy.js")).read())
-
-# configure plots
-source_raw = ColumnDataSource(data=dict(x=[], y=[]))
-source_resi = ColumnDataSource(data=dict(xr=[], yr=[]))
-
-source_raw_line = ColumnDataSource(data=dict(xfit=[], yfit=[]))
-
-tools_raw = 'wheel_zoom,pan,reset,save'
-
-raw = figure(title="Progress Curve Fit", x_axis_label="Time", y_axis_label="Signal",
-             plot_width=350, plot_height=300, tools=tools_raw)
-resi = figure(title="Progress Curve Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
-             plot_width=700, plot_height=200, tools='wheel_zoom,pan,reset')
-resi.yaxis.formatter = BasicTickFormatter(precision=2, use_scientific=True)
-
-raw.circle('x', 'y', size=2, source=source_raw, color='gray',
-            selection_color="black", alpha=0.6, nonselection_alpha=0.2, selection_alpha=0.6)
-resi.circle('xr', 'yr', size=5, source=source_resi, color='grey', alpha=0.6)
-
-raw.line('xfit', 'yfit', source=source_raw_line, color='red')
-
-source_model.data = slope_data[['x', 'y']].to_dict('list')
-
-source_model_line.data = slope_data_fit[['xfit', 'yfit']].to_dict('list')
-
-model.circle('x', 'y', size=8, source=source_model, color='grey', alpha=0.6)
-
-model.line('xfit', 'yfit', source=source_model_line, line_width=3, color='black', alpha=0.4)
-
-# update plots according to raw data selection
-range_slider = RangeSlider(start=df[x_sample_guess].values[0], end=df[x_sample_guess].values[-1],
-                value=(df[x_sample_guess].values[0], df[x_sample_guess].values[-1]),
-                step=df[x_sample_guess].values[1]-df[x_sample_guess].values[0],
-                title='X-Axis Range', width=650)
-
-range_slider.on_change('value', selection_change)
-
-start_time = TextInput(value=str(df[x_sample_guess].values[0]), title="Start Time")
-end_time = TextInput(value=str(df[x_sample_guess].values[-1]), title='End Time')
-
-# update plots based on ticker selections
-fit_choice.on_change('active', selection_change)
-x_sample_choice.on_change('value', update_range_slider)
-subtract_sample_choice.on_change('value', update_tickers)
-sample_select.on_change('value', update_tickers)
-model_select.on_change('value', update_tickers)
-transform.on_change('value', update_tickers)
-offset_time.on_change('value', update_tickers)
-start_time.on_change('value', update_time)
-end_time.on_change('value', update_time)
-
-# document formatting
-desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1400)
-widgets = widgetbox(model_select, sample_select, x_sample_choice,
-                    subtract_sample_choice, transform, offset_time)
-table = widgetbox(data_table)
-
-main_row = row(column(upload_button, fit_choice, widgets),
-                column(row(raw, model), resi, range_slider, row(start_time, end_time)),
-                column(download_button, copy_button, table))
-
-sizing_mode = 'scale_width'
-l = layout([
-    [desc],
-    [main_row]
-], sizing_mode=sizing_mode)
-
-update()
-
-curdoc().add_root(l)
-curdoc().title = "Kinetics"
+# load page
+load_page(experiment_df, experiment_db)
