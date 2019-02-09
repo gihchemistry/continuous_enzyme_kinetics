@@ -171,10 +171,10 @@ class kinetic_model(object):
         if self.dict['model'] == 'Michaelis-Menten':
             result['x'] = x
             result['xfit'] = xfit
-            try:
-                popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True)
-            except:
-                popt_mm, pcov_mm = curve_fit(mmfit, x, y)
+            #try:
+            popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True)
+            #except:
+            #    popt_mm, pcov_mm = curve_fit(mmfit, x, y)
             perr_mm = np.sqrt(np.diag(pcov_mm))
             ymm = mmfit(xfit, *popt_mm)
             result['yfit'] = ymm
