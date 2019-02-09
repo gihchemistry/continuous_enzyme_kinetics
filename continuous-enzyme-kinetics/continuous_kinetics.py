@@ -178,7 +178,6 @@ class kinetic_model(object):
             perr_mm = np.sqrt(np.diag(pcov_mm))
             ymm = mmfit(xfit, *popt_mm)
             result['yfit'] = ymm
-            print(result)
             result['Km'] = tuple(['%.2E' % Decimal(str(popt_mm[0])), 
                                     '%.2E' % Decimal(str(perr_mm[0]))])
             result['Vmax'] = tuple(['%.2E' % Decimal(str(popt_mm[1])), 
