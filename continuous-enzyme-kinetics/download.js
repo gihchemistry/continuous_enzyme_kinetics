@@ -1,8 +1,9 @@
 var data = source.data;
-var filetext = 'x,y\n';
+var filetext = 'x,y,e\n';
 for (var i = 0; i < data['x'].length; i++) {
     var currRow = [data['x'][i].toString(),
-                   data['y'][i].toString().concat('\n')];
+                   data['y'][i].toString(),
+                   data['e'][i].toString().concat('\n')];
 
     var joined = currRow.join();
     filetext = filetext.concat(joined);
