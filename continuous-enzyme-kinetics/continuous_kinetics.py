@@ -151,6 +151,7 @@ class kinetic_model(object):
             df['uRates'] = df['uRates'] - df.loc[subtract]['uRates']
             df['rate'] = [ur.nominal_value for ur in df['uRates']]
             df['error'] = [ur.std_dev for ur in df['uRates']]
+            df = df[df.index != subtract]:wq
         except:
             pass
         try:
