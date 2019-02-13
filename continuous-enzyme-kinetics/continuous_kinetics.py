@@ -25,11 +25,11 @@ def mmfit(x, km, vmax):
     '''
     return vmax * x / (km + x)
 
-def icfit(x, bottom, top, slope, IcFifty):
+def icfit(x, bottom, top, slope, p50):
     '''
     IC50 equation
     '''
-    return bottom + (top-bottom)/(slope+(x/IcFifty))
+    return bottom + (top-bottom)/(1+10**((p50-x)*slope))
 
 def spline_fit(x, y):
     
@@ -128,13 +128,13 @@ class kinetic_model(object):
     def __init__(self, dictionary):
         self.dict = dictionary
 
-    def model(self, subtract, transform, threshold):
+    def model(self, subtract, transform, threshold, bottom, top, slope):
         
         result = {}
         df = pd.DataFrame()
         for s in self.dict:
             if type(self.dict[s]) == progress_curve:
-                x = float(re.findall(r"[-+]?\d*\.\d+|\d+", str(s))[0])
+                x = np.float(re.findall(r'-?\d+\.?\d*', str(s))[0])
                 if self.dict[s+'_fit'] == 0:
                         sdf = self.dict[s].spline
                 elif self.dict[s+'_fit'] == 1:
@@ -168,14 +168,11 @@ class kinetic_model(object):
         result['e'] = ['%.2E' % Decimal(str(ei)) for ei in e]
         result['l'] = y - e
         result['u'] = y + e
-        xfit = np.linspace(np.min(x), np.max(x), 100)
         if self.dict['model'] == 'Michaelis-Menten':
             result['x'] = x
+            xfit = np.linspace(np.min(x), np.max(x), 100)
             result['xfit'] = xfit
-            try:
-                popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True)
-            except:
-                popt_mm, pcov_mm = curve_fit(mmfit, x, y)
+            popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True, maxfev=999999999)
             perr_mm = np.sqrt(np.diag(pcov_mm))
             ymm = mmfit(xfit, *popt_mm)
             result['yfit'] = ymm
@@ -185,32 +182,50 @@ class kinetic_model(object):
                                     '%.2E' % Decimal(str(perr_mm[1]))])
             result['c'] = ['grey']*len(result['x'])
             result['ct'] = ['white']*len(result['x'])
-        elif self.dict['model'] == 'EC50/IC50':
+        elif self.dict['model'] == 'pEC50/pIC50':
             result['x'] = x
+            xfit = np.linspace(np.min(x), np.max(x), 100)
             result['xfit'] = xfit
-            try:
-                popt_ic, pcov_ic = curve_fit(icfit, x, y, sigma=e, absolute_sigma=True)
-            except:
-                popt_ic, pcov_ic = curve_fit(icfit, x, y)
+            xn, yn, en = [], [], []
+            for xin, yin, ein in zip(x, y, e):
+                if xin != 0.:
+                    xn.append(xin)
+                    yn.append(yin)
+                    en.append(ein)
+            bounds = ([-np.inf, -np.inf, -np.inf, -np.inf], [np.inf, np.inf, np.inf, np.inf])
+            for ix, b in enumerate([bottom, top, slope]):
+                regex = re.findall(r'-?\d+\.?\d*', str(b))
+                if len(regex) > 0:
+                    regex = eval(b)
+                    if regex > 0:
+                        bounds[0][ix] = regex - regex/1e10
+                        bounds[1][ix] = regex + regex/1e10
+                    elif regex < 0:
+                        bounds[0][ix] = regex + regex/1e10
+                        bounds[1][ix] = regex - regex/1e10
+                    elif regex == 0:
+                        bounds[0][ix] = regex - 1e-10
+                        bounds[1][ix] = regex + 1e-10
+            popt_ic, pcov_ic = curve_fit(icfit, xn, yn, sigma=en, absolute_sigma=True, bounds=bounds, maxfev=999999999)
             perr_ic = np.sqrt(np.abs(np.diag(pcov_ic)))
+            for ix, b in enumerate([bottom, top, slope]):
+                regex = re.findall(r'-?\d+\.?\d*', str(b))
+                if len(regex) > 0:
+                    popt_ic[ix] = eval(b)
+                    perr_ic[ix] = 0.0
             yic = icfit(xfit, *popt_ic)
             result['yfit'] = yic
-            if popt_ic[0] < popt_ic[1]:
-                result['Bottom'] = np.array(['%.2E' % Decimal(str(popt_ic[0])),
+            result['Bottom'] = np.array(['%.2E' % Decimal(str(popt_ic[0])),
                                              '%.2E' % Decimal(str(perr_ic[0]))])
-                result['Top'] = np.array(['%.2E' % Decimal(str(popt_ic[1])),
+            result['Top'] = np.array(['%.2E' % Decimal(str(popt_ic[1])),
                                           '%.2E' % Decimal(str(perr_ic[1]))])
-            else:
-                result['Top'] = np.array(['%.2E' % Decimal(str(popt_ic[0])),
-                                          '%.2E' % Decimal(str(perr_ic[0]))])
-                result['Bottom'] = np.array(['%.2E' % Decimal(str(popt_ic[1])),
-                                             '%.2E' % Decimal(str(perr_ic[1]))])
             result['Slope'] = np.array(['%.2E' % Decimal(str(popt_ic[2])), 
                                         '%.2E' % Decimal(str(perr_ic[2]))])
-            result['IcFifty'] = np.array(['%.2E' % Decimal(str(popt_ic[3])),
+            result['p50'] = np.array(['%.2E' % Decimal(str(popt_ic[3])),
                                           '%.2E' % Decimal(str(perr_ic[3]))])
             result['c'] = ['grey']*len(result['x'])
             result['ct'] = ['white']*len(result['x'])
+            
         else:
             result['x'] = np.linspace(1, len(n), len(n))
             result['xfit'] = np.linspace(1, len(n), len(n))

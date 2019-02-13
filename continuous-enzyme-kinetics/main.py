@@ -59,6 +59,9 @@ def update():
     sample = sample_select.value
     transform = transform_input.value
     offset = offset_input.value
+    top = top_fix.value
+    bottom = bottom_fix.value
+    slope = slope_fix.value
     threshold = threshold_slider.value
     start = start_time.value
     end = end_time.value
@@ -91,7 +94,7 @@ def update():
 
     # model analysis
     model_dict = ck.kinetic_model(experiment_db)
-    model_result = model_dict.model(subtract, transform, threshold)
+    model_result = model_dict.model(subtract, transform, threshold, bottom, top, slope)
     model_data_source.data = pd.DataFrame(data=dict(x=model_result['x'], y=model_result['y'],
                                                     u=model_result['u'], l=model_result['l'],
                                                     e=model_result['e'], n=model_result['n'],
@@ -100,19 +103,21 @@ def update():
     model_fit_source.data = pd.DataFrame(data=dict(x=model_result['xfit'], 
                                                    y=model_result['yfit'])).to_dict('list')
     if experiment_db['model'] == 'Michaelis-Menten':
-        mm_source.data = pd.DataFrame(data=dict(Km=model_result['Km'], 
+        mm_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
+                                                Km=model_result['Km'], 
                                                 Vmax=model_result['Vmax']), index=['value', 'error']).to_dict('list')
-        ic_source.data = pd.DataFrame(data=dict(Bottom=[], Top=[], Slope=[], IcFifty=[])).to_dict('list')
+        ic_source.data = pd.DataFrame(data=dict(label=[], Bottom=[], Top=[], Slope=[], p50=[])).to_dict('list')
         model.xaxis.axis_label = 'Concentration'
-    elif experiment_db['model'] == 'EC50/IC50':
-        ic_source.data = pd.DataFrame(data=dict(Bottom=model_result['Bottom'], Top=model_result['Top'],
+    elif experiment_db['model'] == 'pEC50/pIC50':
+        ic_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
+                                           Bottom=model_result['Bottom'], Top=model_result['Top'],
                                            Slope=model_result['Slope'], 
-                                            IcFifty=model_result['IcFifty']), index=['value', 'error']).to_dict('list')
-        mm_source.data = pd.DataFrame(data=dict(Km=[], Vmax=[])).to_dict('list')
-        model.xaxis.axis_label = 'Concentration'
+                                           p50=model_result['p50']), index=['value', 'error']).to_dict('list')
+        mm_source.data = pd.DataFrame(data=dict(label=[], Km=[], Vmax=[])).to_dict('list')
+        model.xaxis.axis_label = 'Log10(Concentration)'
     else:
-        mm_source.data = pd.DataFrame(data=dict(Km=[], Vmax=[])).to_dict('list')
-        ic_source.data = pd.DataFrame(data=dict(Bottom=[], Top=[], Slope=[], IcFifty=[])).to_dict('list')
+        mm_source.data = pd.DataFrame(data=dict(label=[], Km=[], Vmax=[])).to_dict('list')
+        ic_source.data = pd.DataFrame(data=dict(label=[], Bottom=[], Top=[], Slope=[], p50=[])).to_dict('list')
         model.xaxis.axis_label = 'Sample #'
         
 def load_page(experiment_df, experiment_db):
@@ -126,14 +131,12 @@ def load_page(experiment_df, experiment_db):
     # progress curve plots
     global raw_source
     raw_source = ColumnDataSource(data=dict(x=[], y=[], yr=[], yfit=[]))
-
     global raw
     raw = figure(title="Initial Rate Fit", x_axis_label="Time", y_axis_label="Signal",
                  plot_width=350, plot_height=300, tools=plot_tools)
     raw.circle('x', 'y', size=2, source=raw_source, color='gray',
                 selection_color="black", alpha=0.6, nonselection_alpha=0.2, selection_alpha=0.6)
     raw.line('x', 'yfit', source=raw_source, color='red')
-
     global resi
     resi = figure(title="Initial Rate Fit Residuals", x_axis_label="Time", y_axis_label="Residual",
                  plot_width=700, plot_height=200, tools='wheel_zoom,pan,reset')
@@ -163,7 +166,7 @@ def load_page(experiment_df, experiment_db):
     # dropdown menu for selecting titration experiment model
     global model_select
     model_select = Select(title='Choose Model', value='Michaelis-Menten', 
-                          options=['Michaelis-Menten', 'EC50/IC50', 'High-Throughput Screen'], width=350)
+                          options=['Michaelis-Menten', 'pEC50/pIC50', 'High-Throughput Screen'], width=350)
     model_select.on_change('value', widget_callback)
 
     # dropdown menu for selecting blank sample to subtract from remaining titration samples 
@@ -188,6 +191,19 @@ def load_page(experiment_df, experiment_db):
     offset_input = TextInput(value='', title="Enter Time Between Mixing and First Read", width=350)
     offset_input.on_change('value', widget_callback)
 
+    # text input boxes for fixing EC/IC50 parameters
+    global bottom_fix
+    bottom_fix = TextInput(value='', title="Fix pIC50/pEC50 Bottom")
+    bottom_fix.on_change('value', widget_callback)
+    
+    global top_fix
+    top_fix = TextInput(value='', title="Fix pIC50/pEC50 Top")
+    top_fix.on_change('value', widget_callback)
+    
+    global slope_fix 
+    slope_fix = TextInput(value='', title="Fix pIC50/pEC50 Hill Slope")
+    slope_fix.on_change('value', widget_callback)
+    
     # text input boxes for progress curve xrange selection
     global start_time
     start_time = TextInput(value=str(experiment_df[list(experiment_df)[0]].values[0]), title="Start Time")
@@ -236,29 +252,31 @@ def load_page(experiment_df, experiment_db):
         TableColumn(field='e', title='Std. Error')
     ]
     global rate_table
-    rate_table = DataTable(source=model_data_source, columns=columns, width=350, height=500,
+    rate_table = DataTable(source=model_data_source, columns=columns, width=350, height=250,
                            selectable=True, editable=True)
 
     # tables containing model fits and errors
     global mm_source
-    mm_source = ColumnDataSource({'Km':[], 'Vmax':[]})
+    mm_source = ColumnDataSource({'label':[], 'Km':[], 'Vmax':[]})
     columns = [
-        TableColumn(field='Km', title='Km'),
-        TableColumn(field='Vmax', title='Vmax')
+        TableColumn(field='label', title=''),
+        TableColumn(field='Vmax', title='Vmax'),
+        TableColumn(field='Km', title='Km')
     ]
     global mm_table
-    mm_table = DataTable(source=mm_source, columns=columns, width=350, height=100,
+    mm_table = DataTable(source=mm_source, columns=columns, width=350, height=75,
                            selectable=True, editable=True)
     global ic_source
-    ic_source = ColumnDataSource({'Bottom':[], 'Top':[], 'Slope':[], 'IcFifty':[]})
+    ic_source = ColumnDataSource({'label':[], 'Bottom':[], 'Top':[], 'Slope':[], 'p50':[]})
     columns = [
+        TableColumn(field='label', title=''),
         TableColumn(field='Bottom', title='Bottom'),
         TableColumn(field='Top', title='Top'),
         TableColumn(field='Slope', title='Slope'),
-        TableColumn(field='IcFifty', title='IC50/EC50')
+        TableColumn(field='p50', title='pEC/IC50')
     ]
     global ic_table
-    ic_table = DataTable(source=ic_source, columns=columns, width=350, height=100,
+    ic_table = DataTable(source=ic_source, columns=columns, width=350, height=75,
                            selectable=True, editable=True)
 
     # button for copying rate data table to clipboard
@@ -278,11 +296,11 @@ def load_page(experiment_df, experiment_db):
     desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1400)
 
     widgets = widgetbox(model_select, sample_select, subtract_select, 
-                        transform_input, offset_input)
+                        transform_input, offset_input, bottom_fix, top_fix, slope_fix)
     table = widgetbox(rate_table)
-    main_row = row(column(upload_button, fit_button, widgets, threshold_slider, mm_table, ic_table),
+    main_row = row(column(upload_button, fit_button, widgets),
                     column(row(raw, model), resi, range_slider, row(start_time, end_time)),
-                    column(download_button, copy_button, table))
+                    column(download_button, copy_button, table, mm_table, ic_table, threshold_slider))
 
     sizing_mode = 'scale_width'
     l = layout([
