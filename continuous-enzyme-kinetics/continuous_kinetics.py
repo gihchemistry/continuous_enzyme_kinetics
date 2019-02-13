@@ -172,7 +172,7 @@ class kinetic_model(object):
             result['x'] = x
             xfit = np.linspace(np.min(x), np.max(x), 100)
             result['xfit'] = xfit
-            popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True, maxfev=999999999)
+            popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True, maxfev=999999)
             perr_mm = np.sqrt(np.diag(pcov_mm))
             ymm = mmfit(xfit, *popt_mm)
             result['yfit'] = ymm
@@ -206,7 +206,7 @@ class kinetic_model(object):
                     elif regex == 0:
                         bounds[0][ix] = regex - 1e-10
                         bounds[1][ix] = regex + 1e-10
-            popt_ic, pcov_ic = curve_fit(icfit, xn, yn, sigma=en, absolute_sigma=True, bounds=bounds, maxfev=999999999)
+            popt_ic, pcov_ic = curve_fit(icfit, xn, yn, sigma=en, absolute_sigma=True, bounds=bounds, maxfev=999999)
             perr_ic = np.sqrt(np.abs(np.diag(pcov_ic)))
             for ix, b in enumerate([bottom, top, slope]):
                 regex = re.findall(r'-?\d+\.?\d*', str(b))
