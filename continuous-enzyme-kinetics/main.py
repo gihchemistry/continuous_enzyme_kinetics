@@ -38,20 +38,24 @@ def slider_callback(attrname, old, new):
 def threshold_callback(attrname, old, new):
     
     if experiment_db['model'] == 'High-Throughput Screen':
-        std = np.std(model_data_source.data['yp'])
-        avg = np.mean(model_data_source.data['yp'])
+        std = np.std(model_plot_source.data['yp'])
+        avg = np.mean(model_plot_source.data['yp'])
         color, colort = [], []
-        for r in model_data_source.data['y']:
+        for r in model_plot_source.data['yp']:
             if r >= avg + std*threshold_slider.value:
                 color.append('red')
-                colort.append('#EC7063')
             elif r <= avg - std*threshold_slider.value:
                 color.append('blue')
-                colort.append('#5DADE2')
             else:
                 color.append('grey')
+        for r in model_data_source.data['yt']:
+            if float(r) >= avg + std*threshold_slider.value:
+                colort.append('#EC7063')
+            elif float(r) <= avg - std*threshold_slider.value:
+                colort.append('#5DADE2')
+            else:
                 colort.append('white')
-        model_data_source.data['cp'] = color
+        model_plot_source.data['cp'] = color
         model_data_source.data['ct'] = colort
 
 def update():
