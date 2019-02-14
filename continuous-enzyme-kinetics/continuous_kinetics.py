@@ -272,10 +272,10 @@ class kinetic_model(object):
             result['ep'] = e
             result['xfit'] = np.linspace(1, len(n), len(n))
             result['yfit'] = np.repeat(np.mean(result['yp']), len(n))
-            std = np.std(result['y'])
-            avg = np.mean(result['y'])
+            std = np.std(result['yp'])
+            avg = np.mean(result['yp'])
             color, colort = [], []
-            for r in result['y']:
+            for r in result['yp']:
                 if r >= avg + std*threshold:
                     color.append('red')
                     colort.append('#EC7063')
