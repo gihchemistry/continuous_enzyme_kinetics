@@ -174,33 +174,45 @@ class kinetic_model(object):
             pass
         n, x, y, e = df.index.values, df['x'].values, df['rate'].values, df['error'].values
         result['n'] = n
-        result['y'] = y
+        result['xt'] = x
         result['yt'] = ['%.2E' % Decimal(str(yi)) for yi in y]
-        result['e'] = ['%.2E' % Decimal(str(ei)) for ei in e]
+        result['et'] = ['%.2E' % Decimal(str(ei)) for ei in e]
         result['l'] = y - e
         result['u'] = y + e
         if self.dict['model'] == 'Michaelis-Menten':
-            result['x'] = x
             include = np.where(x != 1e-23)[0]
             x, y, e = x[include], y[include], e[include]
-            xfit = np.linspace(np.min(x), np.max(x), 100)
-            result['xfit'] = xfit
-            popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True, maxfev=9999)
-            perr_mm = np.sqrt(np.diag(pcov_mm))
-            ymm = mmfit(xfit, *popt_mm)
-            result['yfit'] = ymm
-            result['Km'] = tuple(['%.2E' % Decimal(str(popt_mm[0])), 
-                                    '%.2E' % Decimal(str(perr_mm[0]))])
-            result['Vmax'] = tuple(['%.2E' % Decimal(str(popt_mm[1])), 
-                                    '%.2E' % Decimal(str(perr_mm[1]))])
-            result['c'] = ['grey']*len(result['x'])
-            result['ct'] = ['white']*len(result['x'])
+            result['yp'] = y
+            result['xp'] = x
+            result['ep'] = e
+            result['cp'] = ['grey']*len(result['xp'])
+            result['ct'] = ['white']*len(result['xt'])
+            try:
+                xfit = np.linspace(np.min(x), np.max(x), 100)
+                result['xfit'] = xfit
+                popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True, maxfev=100000)
+                perr_mm = np.sqrt(np.diag(pcov_mm))
+                ymm = mmfit(xfit, *popt_mm)
+                result['yfit'] = ymm
+                result['Km'] = tuple(['%.2E' % Decimal(str(popt_mm[0])), 
+                                        '%.2E' % Decimal(str(perr_mm[0]))])
+                result['Vmax'] = tuple(['%.2E' % Decimal(str(popt_mm[1])), 
+                                        '%.2E' % Decimal(str(perr_mm[1]))])
+            except:
+                result['xfit'] = []
+                result['yfit'] = []
+                result['Km'] = tuple([np.nan, np.nan])
+                result['Vmax'] = tuple([np.nan, np.nan])
         elif self.dict['model'] == 'pEC50/pIC50':
-            result['x'] = x
             include = np.where(x != 1e-23)[0]
             x, y, e = x[include], y[include], e[include]
-            xfit = np.linspace(np.min(x), np.max(x), 100)
-            result['xfit'] = xfit
+            include = np.where(x != 0.)[0]
+            x, y, e = x[include], y[include], e[include]
+            result['yp'] = y
+            result['xp'] = x
+            result['ep'] = e
+            result['l'] = y - e
+            result['u'] = y + e
             xn, yn, en = [], [], []
             for xin, yin, ein in zip(x, y, e):
                 if xin != 0.:
@@ -221,30 +233,45 @@ class kinetic_model(object):
                     elif regex == 0:
                         bounds[0][ix] = regex - 1e-10
                         bounds[1][ix] = regex + 1e-10
-            popt_ic, pcov_ic = curve_fit(icfit, xn, yn, sigma=en, absolute_sigma=True, bounds=bounds, maxfev=9999)
-            perr_ic = np.sqrt(np.abs(np.diag(pcov_ic)))
-            for ix, b in enumerate([bottom, top, slope]):
-                regex = re.findall(r'-?\d+\.?\d*', str(b))
-                if len(regex) > 0:
-                    popt_ic[ix] = eval(b)
-                    perr_ic[ix] = 0.0
-            yic = icfit(xfit, *popt_ic)
-            result['yfit'] = yic
-            result['Bottom'] = np.array(['%.2E' % Decimal(str(popt_ic[0])),
-                                             '%.2E' % Decimal(str(perr_ic[0]))])
-            result['Top'] = np.array(['%.2E' % Decimal(str(popt_ic[1])),
-                                          '%.2E' % Decimal(str(perr_ic[1]))])
-            result['Slope'] = np.array(['%.2E' % Decimal(str(popt_ic[2])), 
-                                        '%.2E' % Decimal(str(perr_ic[2]))])
-            result['p50'] = np.array(['%.2E' % Decimal(str(popt_ic[3])),
-                                          '%.2E' % Decimal(str(perr_ic[3]))])
-            result['c'] = ['grey']*len(result['x'])
-            result['ct'] = ['white']*len(result['x'])
+            result['cp'] = ['grey']*len(result['xp'])
+            result['ct'] = ['white']*len(result['xt'])
+            xfit = np.linspace(np.min(result['xp']), np.max(result['xp']), 100)
+            try:
+                popt_ic, pcov_ic = curve_fit(icfit, xn, yn, sigma=en, absolute_sigma=True, bounds=bounds, maxfev=100000)
+                perr_ic = np.sqrt(np.abs(np.diag(pcov_ic)))
+                for ix, b in enumerate([bottom, top, slope]):
+                    regex = re.findall(r'-?\d+\.?\d*', str(b))
+                    if len(regex) > 0:
+                        popt_ic[ix] = eval(b)
+                        perr_ic[ix] = 0.0
+                yic = icfit(xfit, *popt_ic)
+                result['xfit'] = xfit
+                result['yfit'] = yic
+                result['Bottom'] = np.array(['%.2E' % Decimal(str(popt_ic[0])),
+                                                 '%.2E' % Decimal(str(perr_ic[0]))])
+                result['Top'] = np.array(['%.2E' % Decimal(str(popt_ic[1])),
+                                              '%.2E' % Decimal(str(perr_ic[1]))])
+                result['Slope'] = np.array(['%.2E' % Decimal(str(popt_ic[2])), 
+                                            '%.2E' % Decimal(str(perr_ic[2]))])
+                result['p50'] = np.array(['%.2E' % Decimal(str(popt_ic[3])),
+                                              '%.2E' % Decimal(str(perr_ic[3]))])
+                result['cp'] = ['grey']*len(result['xp'])
+                result['ct'] = ['white']*len(result['xt'])
+            except:
+                result['xfit'] = []
+                result['yfit'] = []
+                result['Bottom'] = [np.nan, np.nan]
+                result['Top'] = [np.nan, np.nan]
+                result['Slope'] = [np.nan, np.nan]
+                result['p50'] = [np.nan, np.nan]               
             
         else:
-            result['x'] = np.linspace(1, len(n), len(n))
+            result['xt'] = np.linspace(1, len(n), len(n))
+            result['yp'] = y
+            result['xp'] = np.linspace(1, len(n), len(n))
+            result['ep'] = e
             result['xfit'] = np.linspace(1, len(n), len(n))
-            result['yfit'] = np.repeat(np.mean(result['y']), len(n))
+            result['yfit'] = np.repeat(np.mean(result['yp']), len(n))
             std = np.std(result['y'])
             avg = np.mean(result['y'])
             color, colort = [], []
@@ -258,8 +285,8 @@ class kinetic_model(object):
                 else:
                     color.append('grey')
                     colort.append('white')
-            result['c'] = color
+            result['cp'] = color
             result['ct'] = colort
         self.result = result
-        
+
         return self.result

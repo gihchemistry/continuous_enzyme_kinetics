@@ -27,6 +27,10 @@ def sample_callback(attrname, old, new):
     
 def slider_callback(attrname, old, new):
     
+    if range_slider.value[0] >= range_slider.value[1] - 5*range_slider.step and range_slider.value[1] <= range_slider.end - 5*range_slider.step:
+        range_slider.value = (range_slider.value[0], range_slider.value[0] + 5*range_slider.step)
+    elif range_slider.value[0] >= range_slider.value[1] - 5*range_slider.step and range_slider.value[1] > range_slider.end - 5*range_slider.step:
+        range_slider.value = (range_slider.value[1] - 5*range_slider.step, range_slider.value[1])
     if float(start_time.value) != range_slider.value[0] or float(end_time.value) != range_slider.value[1]: 
         start_time.value = str(range_slider.value[0])
         end_time.value = str(range_slider.value[1])
@@ -34,8 +38,8 @@ def slider_callback(attrname, old, new):
 def threshold_callback(attrname, old, new):
     
     if experiment_db['model'] == 'High-Throughput Screen':
-        std = np.std(model_data_source.data['y'])
-        avg = np.mean(model_data_source.data['y'])
+        std = np.std(model_data_source.data['yp'])
+        avg = np.mean(model_data_source.data['yp'])
         color, colort = [], []
         for r in model_data_source.data['y']:
             if r >= avg + std*threshold_slider.value:
@@ -47,7 +51,7 @@ def threshold_callback(attrname, old, new):
             else:
                 color.append('grey')
                 colort.append('white')
-        model_data_source.data['c'] = color
+        model_data_source.data['cp'] = color
         model_data_source.data['ct'] = colort
 
 def update():
@@ -67,10 +71,11 @@ def update():
     start = start_time.value
     end = end_time.value
 
+
     # update database
     experiment_db[sample+'_fit'] = fit_routine
     experiment_db['model'] = model_eq
-    
+
     # progress curve analysis
     pdf = experiment_df[[experiment_df.columns[0], sample]]
     experiment_db[sample] = ck.progress_curve(pdf)
@@ -89,21 +94,20 @@ def update():
         experiment_db[sample].logarithmic = progress_data
 
     raw_source.data = pd.DataFrame(data=dict(x=progress_data['x'], 
-                                             y=progress_data['y'], 
-                                             yr=progress_data['resi'], 
-                                             yfit=progress_data['yfit'])).to_dict('list')
+                                            y=progress_data['y'], 
+                                            yr=progress_data['resi'], 
+                                            yfit=progress_data['yfit'])).to_dict('list')
 
     # model analysis
     if len(list(experiment_df)) > 2:
         model_dict = ck.kinetic_model(experiment_db)
         model_result = model_dict.model(subtract, transform, threshold, bottom, top, slope, scalex)
-        model_data_source.data = pd.DataFrame(data=dict(x=model_result['x'], y=model_result['y'],
-                                                        u=model_result['u'], l=model_result['l'],
-                                                        e=model_result['e'], n=model_result['n'],
-                                                        c=model_result['c'], ct=model_result['ct'],
-                                                        yt=model_result['yt'])).to_dict('list')
+        model_data_source.data = pd.DataFrame(data=dict(xt=model_result['xt'], yt=model_result['yt'], et=model_result['et'], n=model_result['n'], 
+                                                        ct=model_result['ct'])).to_dict('list')
+        model_plot_source.data = pd.DataFrame(data=dict(xp=model_result['xp'], yp=model_result['yp'], u=model_result['u'], l=model_result['l'],
+                                                       ep=model_result['ep'],  cp=model_result['cp'])).to_dict('list')
         model_fit_source.data = pd.DataFrame(data=dict(x=model_result['xfit'], 
-                                                       y=model_result['yfit'])).to_dict('list')
+                                                        y=model_result['yfit'])).to_dict('list')
         if experiment_db['model'] == 'Michaelis-Menten':
             mm_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
                                                     Km=model_result['Km'], 
@@ -112,9 +116,9 @@ def update():
             model.xaxis.axis_label = 'Concentration'
         elif experiment_db['model'] == 'pEC50/pIC50':
             ic_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
-                                               Bottom=model_result['Bottom'], Top=model_result['Top'],
-                                               Slope=model_result['Slope'], 
-                                               p50=model_result['p50']), index=['value', 'error']).to_dict('list')
+                                                Bottom=model_result['Bottom'], Top=model_result['Top'],
+                                                Slope=model_result['Slope'], 
+                                                p50=model_result['p50']), index=['value', 'error']).to_dict('list')
             mm_source.data = pd.DataFrame(data=dict(label=[], Km=[], Vmax=[])).to_dict('list')
             model.xaxis.axis_label = 'Log10(Concentration)'
         else:
@@ -147,14 +151,16 @@ def load_page(experiment_df, experiment_db):
 
     # model plot for titration experiments
     global model_data_source
-    model_data_source = ColumnDataSource(data=dict(x=[], y=[], l=[], u=[], n=[], c=[]))
+    model_data_source = ColumnDataSource(data=dict(xt=[], yt=[], n=[], ct=[], et=[]))
+    global model_plot_source
+    model_plot_source = ColumnDataSource(data=dict(xp=[], yp=[], l=[], u=[], cp=[], ep=[]))
     global model_fit_source
     model_fit_source = ColumnDataSource(data=dict(x=[], y=[]))
     global model
     model = figure(title='Model Fit', x_axis_label='Concentration', y_axis_label='Rate', plot_width=350,
                   plot_height=300, tools=plot_tools)
-    model.circle('x', 'y', size=8, source=model_data_source, color='c', alpha=0.6)
-    model.add_layout(Whisker(source=model_data_source, base='x', upper='u', lower='l'))
+    model.circle('xp', 'yp', size=8, source=model_plot_source, color='cp', alpha=0.6)
+    model.add_layout(Whisker(source=model_plot_source, base='xp', upper='u', lower='l'))
     model.line('x', 'y', source=model_fit_source, line_width=3, color='black', alpha=0.4)
     
     ########## bokeh widgets ##########
@@ -256,7 +262,7 @@ def load_page(experiment_df, experiment_db):
     columns = [
         TableColumn(field='n', title='Sample'),
         TableColumn(field='yt', title='Slope (Initial Rate)', formatter=formatter),
-        TableColumn(field='e', title='Std. Error')
+        TableColumn(field='et', title='Std. Error')
     ]
     global rate_table
     rate_table = DataTable(source=model_data_source, columns=columns, width=350, height=250,
