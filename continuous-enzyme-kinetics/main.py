@@ -93,32 +93,33 @@ def update():
                                              yfit=progress_data['yfit'])).to_dict('list')
 
     # model analysis
-    model_dict = ck.kinetic_model(experiment_db)
-    model_result = model_dict.model(subtract, transform, threshold, bottom, top, slope)
-    model_data_source.data = pd.DataFrame(data=dict(x=model_result['x'], y=model_result['y'],
-                                                    u=model_result['u'], l=model_result['l'],
-                                                    e=model_result['e'], n=model_result['n'],
-                                                    c=model_result['c'], ct=model_result['ct'],
-                                                    yt=model_result['yt'])).to_dict('list')
-    model_fit_source.data = pd.DataFrame(data=dict(x=model_result['xfit'], 
-                                                   y=model_result['yfit'])).to_dict('list')
-    if experiment_db['model'] == 'Michaelis-Menten':
-        mm_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
-                                                Km=model_result['Km'], 
-                                                Vmax=model_result['Vmax']), index=['value', 'error']).to_dict('list')
-        ic_source.data = pd.DataFrame(data=dict(label=[], Bottom=[], Top=[], Slope=[], p50=[])).to_dict('list')
-        model.xaxis.axis_label = 'Concentration'
-    elif experiment_db['model'] == 'pEC50/pIC50':
-        ic_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
-                                           Bottom=model_result['Bottom'], Top=model_result['Top'],
-                                           Slope=model_result['Slope'], 
-                                           p50=model_result['p50']), index=['value', 'error']).to_dict('list')
-        mm_source.data = pd.DataFrame(data=dict(label=[], Km=[], Vmax=[])).to_dict('list')
-        model.xaxis.axis_label = 'Log10(Concentration)'
-    else:
-        mm_source.data = pd.DataFrame(data=dict(label=[], Km=[], Vmax=[])).to_dict('list')
-        ic_source.data = pd.DataFrame(data=dict(label=[], Bottom=[], Top=[], Slope=[], p50=[])).to_dict('list')
-        model.xaxis.axis_label = 'Sample #'
+    if len(list(experiment_df)) > 2:
+        model_dict = ck.kinetic_model(experiment_db)
+        model_result = model_dict.model(subtract, transform, threshold, bottom, top, slope)
+        model_data_source.data = pd.DataFrame(data=dict(x=model_result['x'], y=model_result['y'],
+                                                        u=model_result['u'], l=model_result['l'],
+                                                        e=model_result['e'], n=model_result['n'],
+                                                        c=model_result['c'], ct=model_result['ct'],
+                                                        yt=model_result['yt'])).to_dict('list')
+        model_fit_source.data = pd.DataFrame(data=dict(x=model_result['xfit'], 
+                                                       y=model_result['yfit'])).to_dict('list')
+        if experiment_db['model'] == 'Michaelis-Menten':
+            mm_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
+                                                    Km=model_result['Km'], 
+                                                    Vmax=model_result['Vmax']), index=['value', 'error']).to_dict('list')
+            ic_source.data = pd.DataFrame(data=dict(label=[], Bottom=[], Top=[], Slope=[], p50=[])).to_dict('list')
+            model.xaxis.axis_label = 'Concentration'
+        elif experiment_db['model'] == 'pEC50/pIC50':
+            ic_source.data = pd.DataFrame(data=dict(label=['Fit Value', 'Std. Error'],
+                                               Bottom=model_result['Bottom'], Top=model_result['Top'],
+                                               Slope=model_result['Slope'], 
+                                               p50=model_result['p50']), index=['value', 'error']).to_dict('list')
+            mm_source.data = pd.DataFrame(data=dict(label=[], Km=[], Vmax=[])).to_dict('list')
+            model.xaxis.axis_label = 'Log10(Concentration)'
+        else:
+            mm_source.data = pd.DataFrame(data=dict(label=[], Km=[], Vmax=[])).to_dict('list')
+            ic_source.data = pd.DataFrame(data=dict(label=[], Bottom=[], Top=[], Slope=[], p50=[])).to_dict('list')
+            model.xaxis.axis_label = 'Sample #'
         
 def load_page(experiment_df, experiment_db):
     
@@ -318,13 +319,15 @@ def file_callback(attrname, old, new):
     # decode data
     raw_contents = file_source.data['file_contents'][0]
     prefix, b64_contents = raw_contents.split(',', 1)
-    file_contents = base64.b64decode(b64_contents).decode('utf-8-sig')
+    print(base64.b64decode(b64_contents))
+    file_contents = base64.b64decode(b64_contents).decode('utf-8-sig', errors='ignore')
     file_io = StringIO(file_contents)
     
     # update dataframe
     global experiment_df
     experiment_df = pd.read_csv(file_io)
     experiment_df.columns = [str(i) for i in list(experiment_df)]
+    experiment_df = experiment_df.dropna(axis=1)
     
     # update database
     global experiment_db
