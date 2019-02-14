@@ -326,7 +326,7 @@ def file_callback(attrname, old, new):
     global experiment_df
     experiment_df = pd.read_csv(file_io)
     experiment_df.columns = [str(i) for i in list(experiment_df)]
-    experiment_df = experiment_df.dropna(axis=1)
+    #experiment_df = experiment_df.dropna(axis=1)
     
     # update database
     global experiment_db
@@ -334,10 +334,12 @@ def file_callback(attrname, old, new):
     xmin = experiment_df[experiment_df.columns[0]].values[0]
     xmax = experiment_df[experiment_df.columns[0]].values[-1]
     for s in experiment_df.columns[1:]:
-        df = experiment_df[[experiment_df.columns[0], s]]
-        experiment_db[s] = ck.progress_curve(df)
-        experiment_db[s+'_fit'] = 0
-        experiment_db[s].spline(xmin, xmax)
+        if np.max(experiment_df[s]) > 0.:
+            df = experiment_df[[experiment_df.columns[0], s]].dropna(axis=0)
+            print(df)
+            experiment_db[s] = ck.progress_curve(df)
+            experiment_db[s+'_fit'] = 0
+            experiment_db[s].spline(xmin, xmax)
     
     # reload page
     load_page(experiment_df, experiment_db)

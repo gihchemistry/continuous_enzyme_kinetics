@@ -98,7 +98,7 @@ class progress_curve(object):
     def spline(self, start, end):
 
         df = self.data[(self.data[self.data.columns[0]] >= float(start)) &
-                       (self.data[self.data.columns[0]] <= float(end))]
+                       (self.data[self.data.columns[0]] <= float(end))].dropna(axis=0)
         x, y = df[df.columns[0]], df[df.columns[1]]
         spline = spline_fit(x, y)
         self.spline = spline
@@ -108,7 +108,7 @@ class progress_curve(object):
     def linear(self, start, end):
 
         df = self.data[(self.data[self.data.columns[0]] >= float(start)) &
-                       (self.data[self.data.columns[0]] <= float(end))]
+                       (self.data[self.data.columns[0]] <= float(end))].dropna(axis=0)
         x, y = df[df.columns[0]], df[df.columns[1]]
         linear = linear_fit(x, y)
         self.linear = linear
@@ -118,7 +118,7 @@ class progress_curve(object):
     def logarithmic(self, start, end, offset):
         
         df = self.data[(self.data[self.data.columns[0]] >= float(start)) &
-                       (self.data[self.data.columns[0]] <= float(end))]
+                       (self.data[self.data.columns[0]] <= float(end))].dropna(axis=0)
         x, y = df[df.columns[0]], df[df.columns[1]]
         try:
             x = x + offset
@@ -143,7 +143,7 @@ class kinetic_model(object):
                 if len(re.findall(r'-?\d+\.?\d*', str(s))) > 0:
                     x = np.float(re.findall(r'-?\d+\.?\d*', str(s))[0])
                 else:
-                    x = -1.0
+                    x = 1e-23
                 if self.dict[s+'_fit'] == 0:
                     sdf = self.dict[s].spline
                 elif self.dict[s+'_fit'] == 1:
@@ -179,7 +179,7 @@ class kinetic_model(object):
         result['u'] = y + e
         if self.dict['model'] == 'Michaelis-Menten':
             result['x'] = x
-            include = np.where(x != -1.0)[0]
+            include = np.where(x != 1e-23)[0]
             x, y, e = x[include], y[include], e[include]
             xfit = np.linspace(np.min(x), np.max(x), 100)
             result['xfit'] = xfit
@@ -195,7 +195,7 @@ class kinetic_model(object):
             result['ct'] = ['white']*len(result['x'])
         elif self.dict['model'] == 'pEC50/pIC50':
             result['x'] = x
-            include = np.where(x != -1.0)[0]
+            include = np.where(x != 1e-23)[0]
             x, y, e = x[include], y[include], e[include]
             xfit = np.linspace(np.min(x), np.max(x), 100)
             result['xfit'] = xfit
