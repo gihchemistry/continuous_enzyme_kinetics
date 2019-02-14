@@ -134,7 +134,7 @@ class kinetic_model(object):
     def __init__(self, dictionary):
         self.dict = dictionary
 
-    def model(self, subtract, transform, threshold, bottom, top, slope):
+    def model(self, subtract, transform, threshold, bottom, top, slope, scalex):
         
         result = {}
         df = pd.DataFrame()
@@ -142,6 +142,8 @@ class kinetic_model(object):
             if type(self.dict[s]) == progress_curve:
                 if len(re.findall(r'-?\d+\.?\d*', str(s))) > 0:
                     x = np.float(re.findall(r'-?\d+\.?\d*', str(s))[0])
+                    if scalex == 1 and x != 0.0:
+                        x = np.log10(x)
                 else:
                     x = 1e-23
                 if self.dict[s+'_fit'] == 0:

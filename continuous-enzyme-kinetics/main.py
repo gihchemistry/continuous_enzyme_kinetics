@@ -7,7 +7,7 @@ import numpy as np
 from bokeh.io import curdoc
 from bokeh.layouts import row, column, widgetbox, layout
 from bokeh.models import ColumnDataSource, CustomJS, HoverTool, Div, BasicTickFormatter, Whisker
-from bokeh.models.widgets import RadioButtonGroup, Select, TextInput, Button, DataTable, TableColumn, RangeSlider, Slider, HTMLTemplateFormatter
+from bokeh.models.widgets import RadioButtonGroup, Select, TextInput, Button, DataTable, TableColumn, RangeSlider, Slider, HTMLTemplateFormatter, CheckboxButtonGroup
 from bokeh.plotting import figure
     
 ########## bokeh methods ##########
@@ -54,6 +54,7 @@ def update():
 
     # get selections
     fit_routine = fit_button.active
+    scalex = len(scalex_box.active)
     model_eq = model_select.value
     subtract = subtract_select.value
     sample = sample_select.value
@@ -95,7 +96,7 @@ def update():
     # model analysis
     if len(list(experiment_df)) > 2:
         model_dict = ck.kinetic_model(experiment_db)
-        model_result = model_dict.model(subtract, transform, threshold, bottom, top, slope)
+        model_result = model_dict.model(subtract, transform, threshold, bottom, top, slope, scalex)
         model_data_source.data = pd.DataFrame(data=dict(x=model_result['x'], y=model_result['y'],
                                                         u=model_result['u'], l=model_result['l'],
                                                         e=model_result['e'], n=model_result['n'],
@@ -164,6 +165,11 @@ def load_page(experiment_df, experiment_db):
                                                 'Logarithmic Fit'], active=0, width=375)
     fit_button.on_change('active', widget_callback)
 
+    # button for selecting progress curve fitting routine
+    global scalex_box
+    scalex_box = CheckboxButtonGroup(labels=["x = Log10(x)"], active=[])
+    scalex_box.on_change('active', widget_callback)
+    
     # dropdown menu for selecting titration experiment model
     global model_select
     model_select = Select(title='Choose Model', value='Michaelis-Menten', 
@@ -297,7 +303,7 @@ def load_page(experiment_df, experiment_db):
     desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1400)
 
     widgets = widgetbox(model_select, sample_select, subtract_select, 
-                        transform_input, offset_input, bottom_fix, top_fix, slope_fix)
+                        transform_input, offset_input, scalex_box, bottom_fix, top_fix, slope_fix)
     table = widgetbox(rate_table)
     main_row = row(column(upload_button, fit_button, widgets),
                     column(row(raw, model), resi, range_slider, row(start_time, end_time)),
