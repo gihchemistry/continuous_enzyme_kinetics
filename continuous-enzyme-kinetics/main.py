@@ -336,7 +336,6 @@ def file_callback(attrname, old, new):
     for s in experiment_df.columns[1:]:
         if np.max(experiment_df[s]) > 0.:
             df = experiment_df[[experiment_df.columns[0], s]].dropna(axis=0)
-            print(df)
             experiment_db[s] = ck.progress_curve(df)
             experiment_db[s+'_fit'] = 0
             experiment_db[s].spline(xmin, xmax)
