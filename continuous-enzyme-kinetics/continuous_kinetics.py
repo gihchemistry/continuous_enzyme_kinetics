@@ -37,10 +37,16 @@ def spline_fit(x, y):
     spline = UnivariateSpline(x, y)(x)
     derivative = np.abs(np.diff(spline)/np.diff(x))
     threshold = 0.7*(np.max(derivative) - np.min(derivative)) + np.min(derivative)
-    indices = np.where(derivative > threshold)[0]
+    try:
+        indices = np.where(derivative > threshold)[0]
+    except:
+        indices = []
     while len(indices) < 4:
         threshold = threshold*0.9
-        indices = np.where(derivative > threshold)[0]
+        try:
+            indices = np.where(derivative > threshold)[0]
+        except:
+            indices = []
     xi, yi = x[indices], y[indices]
     df = pd.DataFrame(data={'x' : xi, 'y' : yi}).sort_values('x').dropna()
     xi, yi = df.x, df.y
@@ -134,13 +140,16 @@ class kinetic_model(object):
         df = pd.DataFrame()
         for s in self.dict:
             if type(self.dict[s]) == progress_curve:
-                x = np.float(re.findall(r'-?\d+\.?\d*', str(s))[0])
-                if self.dict[s+'_fit'] == 0:
-                        sdf = self.dict[s].spline
-                elif self.dict[s+'_fit'] == 1:
-                        sdf = self.dict[s].linear
+                if len(re.findall(r'-?\d+\.?\d*', str(s))) > 0:
+                    x = np.float(re.findall(r'-?\d+\.?\d*', str(s))[0])
                 else:
-                        sdf = self.dict[s].logarithmic
+                    x = -1.0
+                if self.dict[s+'_fit'] == 0:
+                    sdf = self.dict[s].spline
+                elif self.dict[s+'_fit'] == 1:
+                    sdf = self.dict[s].linear
+                else:
+                    sdf = self.dict[s].logarithmic
                 df.at[s, 'rate'] = sdf['rate']
                 df.at[s, 'error'] = sdf['error']
                 df.at[s, 'x'] = x
@@ -170,6 +179,8 @@ class kinetic_model(object):
         result['u'] = y + e
         if self.dict['model'] == 'Michaelis-Menten':
             result['x'] = x
+            include = np.where(x != -1.0)[0]
+            x, y, e = x[include], y[include], e[include]
             xfit = np.linspace(np.min(x), np.max(x), 100)
             result['xfit'] = xfit
             popt_mm, pcov_mm = curve_fit(mmfit, x, y, sigma=e, absolute_sigma=True, maxfev=9999)
@@ -184,6 +195,8 @@ class kinetic_model(object):
             result['ct'] = ['white']*len(result['x'])
         elif self.dict['model'] == 'pEC50/pIC50':
             result['x'] = x
+            include = np.where(x != -1.0)[0]
+            x, y, e = x[include], y[include], e[include]
             xfit = np.linspace(np.min(x), np.max(x), 100)
             result['xfit'] = xfit
             xn, yn, en = [], [], []

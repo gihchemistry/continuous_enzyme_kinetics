@@ -319,7 +319,6 @@ def file_callback(attrname, old, new):
     # decode data
     raw_contents = file_source.data['file_contents'][0]
     prefix, b64_contents = raw_contents.split(',', 1)
-    print(base64.b64decode(b64_contents))
     file_contents = base64.b64decode(b64_contents).decode('utf-8-sig', errors='ignore')
     file_io = StringIO(file_contents)
     
