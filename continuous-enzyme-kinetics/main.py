@@ -101,7 +101,7 @@ def update():
                                             y=progress_data['y'], 
                                             yr=progress_data['resi'], 
                                             yfit=progress_data['yfit'])).to_dict('list')
-
+    
     # model analysis
     if len(list(experiment_df)) > 2:
         model_dict = ck.kinetic_model(experiment_db)
@@ -195,7 +195,7 @@ def load_page(experiment_df, experiment_db):
     # dropdown menu for selecting titration sample to plot in current view
     global sample_select
     sample_select = Select(title='Y Axis Sample', value=list(experiment_df)[1], 
-                           options=list(experiment_df)[1:]+[''], width=350)
+                           options=list(experiment_df)[1:], width=350)
     sample_select.on_change('value', sample_callback)
 
     # text input box for transforming slopes to rates
@@ -342,7 +342,6 @@ def file_callback(attrname, old, new):
     global experiment_df
     experiment_df = pd.read_csv(file_io)
     experiment_df.columns = [str(i) for i in list(experiment_df)]
-    #experiment_df = experiment_df.dropna(axis=1)
     
     # update database
     global experiment_db

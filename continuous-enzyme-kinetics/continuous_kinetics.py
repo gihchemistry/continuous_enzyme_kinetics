@@ -145,7 +145,7 @@ class kinetic_model(object):
                     if scalex == 1 and x != 0.0:
                         x = np.log10(x)
                 else:
-                    x = 1e-23
+                    x = 0.0
                 if self.dict[s+'_fit'] == 0:
                     sdf = self.dict[s].spline
                 elif self.dict[s+'_fit'] == 1:
