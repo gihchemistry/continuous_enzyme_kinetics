@@ -177,7 +177,7 @@ def load_page(experiment_df, experiment_db):
 
     # button for selecting progress curve fitting routine
     global scalex_box
-    scalex_box = CheckboxButtonGroup(labels=["x = Log10(x)"], active=[])
+    scalex_box = CheckboxButtonGroup(labels=["Transform X-axis to Log10 scale"], active=[])
     scalex_box.on_change('active', widget_callback)
     
     # dropdown menu for selecting titration experiment model
@@ -311,9 +311,11 @@ def load_page(experiment_df, experiment_db):
     ########## document formatting #########
 
     desc = Div(text=open(join(dirname(__file__), "description.html")).read(), width=1400)
-
+    
+    advanced = Div(text="""Advanced settings for \npEC50/pIC50 Analysis""")
+    
     widgets = widgetbox(model_select, sample_select, subtract_select, 
-                        transform_input, offset_input, scalex_box, bottom_fix, top_fix, slope_fix)
+                        transform_input, offset_input, advanced, scalex_box, bottom_fix, top_fix, slope_fix)
     table = widgetbox(rate_table)
     main_row = row(column(upload_button, fit_button, widgets),
                     column(row(raw, model), resi, range_slider, row(start_time, end_time)),
