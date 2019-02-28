@@ -30,7 +30,7 @@ function copyTextToClipboard(text) {
 
 var data = source.data;
 var copytext = 'x,y,e\n';
-for (var i = 0; i < data['x'].length; i++) {
+for (var i = 0; i < data['n'].length; i++) {
     var currRow = [data['n'][i].toString(),
                    data['yt'][i].toString(),
                    data['et'][i].toString().concat('\n')];
