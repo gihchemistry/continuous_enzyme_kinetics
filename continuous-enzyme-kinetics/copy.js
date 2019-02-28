@@ -29,15 +29,11 @@ function copyTextToClipboard(text) {
 }
 
 var data = source.data;
-var copytext = 'x, y, e\n';
+var copytext = 'x,y,e\n';
 for (var i = 0; i < data['x'].length; i++) {
-    var tmpx = data['x'][i].toString().concat(' ')
-    var tmpy = data['y'][i].toString().concat(' ')
-    var tmpe = data['e'][i].toString()
-    var tmprow = tmpx.concat(tmpy)
-    tmprow = tmprow.concat(tmpe)
-    var currRow = [tmprow.concat('\n')];
-
+    var currRow = [data['n'][i].toString(),
+                   data['yt'][i].toString(),
+                   data['et'][i].toString().concat('\n')];
     var joined = currRow.join();
     copytext = copytext.concat(joined);
 }
