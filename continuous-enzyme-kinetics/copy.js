@@ -34,7 +34,8 @@ for (var i = 0; i < data['x'].length; i++) {
     var tmpx = data['x'][i].toString().concat(' ')
     var tmpy = data['y'][i].toString().concat(' ')
     var tmpe = data['e'][i].toString()
-    var tmprow = tmpx.concat(tmpy).concat(tmpe)
+    var tmprow = tmpx.concat(tmpy)
+    tmprow = tmprow.concat(tmpe)
     var currRow = [tmprow.concat('\n')];
 
     var joined = currRow.join();
