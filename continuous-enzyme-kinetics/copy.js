@@ -29,7 +29,7 @@ function copyTextToClipboard(text) {
 }
 
 var data = source.data;
-var copytext = 'x y, e\n';
+var copytext = 'x, y, e\n';
 for (var i = 0; i < data['x'].length; i++) {
     var tmpx = data['x'][i].toString().concat(' ')
     var tmpy = data['y'][i].toString().concat(' ')
